@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+
+<html lang="tr">
+<head><link crossorigin="crossorigin" href="https://cdn.jsdelivr.net" rel="preconnect"/><link crossorigin="crossorigin" href="https://www.gstatic.com" rel="preconnect"/>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>Mutabakat Portalı</title>
+<link href="/favicon.ico" rel="icon"/>
+<link href="./styles.css?v=jump-fix-43" rel="stylesheet"/>
+<!-- Prevent UI flash on refresh (F5): keep UI hidden until auth is ready -->
+<script>
+    document.documentElement.classList.add('preload');
+  </script>
+<script defer="defer" src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script defer="defer" src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script defer="defer" src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script defer="defer" src="https://www.gstatic.com/firebasejs/10.13.0/firebase-storage-compat.js"></script>
+<style>
+/* =========================
+   TOP 20 - TABLO GÖRÜNÜMÜ
+   ========================= */
+
+/* Excel button */
+#btnExportTop20,
+.btn-export-top20{
+  background:#64748b !important;
+  border-color:#64748b !important;
+  color:#fff !important;
+}
+#btnExportTop20:hover,
+.btn-export-top20:hover{
+  background:#475569 !important;
+  border-color:#475569 !important;
+}
+
+/* Card spacing */
+#page-mudur-stok .card-body{
+  padding: 0;
+}
+#page-mudur-stok .card-title{
+  margin: 0 0 10px 0;
+  font-weight: 700;
+}
+
+/* Table wrapper */
+.top20-table-container{
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+  background: #fff;
+}
+
+/* Table base */
+.top20-table-container table{
+  margin-bottom: 0 !important;
+}
+.top20-table-container th,
+.top20-table-container td{
+  padding: 10px 12px !important;
+  vertical-align: middle !important;
+}
+
+/* Header */
+.top20-table-container thead th{
+  background: #f1f5f9 !important;
+  font-weight: 700;
+  border-bottom: 1px solid #e5e7eb !important;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* Zebra + hover */
+.top20-table-container tbody tr:nth-child(even){
+  background: #fafafa;
+}
+.top20-table-container tbody tr:hover{
+  background: #eef2ff;
+}
+
+/* Right aligned count */
+.top20-table-container .text-end,
+.top20-table-container .col-right{
+  text-align: right !important;
+}
+
+/* Count badge */
+.count-badge{
+  display: inline-block;
+  min-width: 42px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Remove any internal scroll in tables */
+.top20-table-container{
+  max-height: none !important;
+}
+
+/* Depo Takip + Mutabakat tabloları hizalama */
+.tbl{ width:100%; table-layout:fixed; }
+.tbl th, .tbl td{ padding:10px 12px; }
+.tbl th:nth-child(n+2), .tbl td:nth-child(n+2){ text-align:right; white-space:nowrap; }
+.tbl th:first-child, .tbl td:first-child{ text-align:left; }
+
+</style></head>
+<body class="auth-mode">
+<!-- Top progress bar (shown on refresh until auth is ready) -->
+<div aria-hidden="true" class="top-progress" id="topProgress"></div>
+<!-- LOGIN -->
+<div class="hidden" id="appRoot">
+<div class="content">
+<div class="topbar">
+<div class="topbar-left">
+<div class="brand">
+<div class="brand-title">Mutabakat Portalı</div>
+<div class="brand-sub" id="topbarUserLeft"></div>
+</div>
+<div class="topnav" id="navItems"></div>
+</div>
+<div style="display:flex;align-items:center;gap:16px;position:relative;">
+<div class="notify-bell" id="notifyBell" onclick="toggleNotifyPanel(event)">
+          🔔
+          <span class="notify-badge hidden" id="notifyCount">0</span>
+</div>
+<div class="global-search">
+<span class="global-search-icon">🔍</span>
+<input id="globalSearchInput" oninput="globalSearch(this.value)" placeholder="Ara..." type="text"/>
+</div>
+<span class="app-version" id="appVersionLabel"></span>
+<button class="secondary" id="feedbackBtn" style="padding:4px 10px;font-size:11px;">Geri Bildirim</button>
+<button class="secondary" id="logoutBtn" style="padding:4px 10px;font-size:11px;">Çıkış Yap</button>
+<div class="notify-dropdown hidden" id="notifyDropdown"></div>
+</div>
+</div>
+<div class="main">
+<!-- RAPORLAR (Tüm roller kullanır) -->
+<div class="page hidden" id="page-mudur-dashboard">
+<h2 style="margin-top:0">Genel Bakış</h2>
+<button class="secondary" onclick="exportMudurDashboardToCSV()" style="margin:6px 0 14px 0;">Excel\'e Aktar (Genel Bakış)</button>
+<!-- 1) KPI kartları -->
+<div class="kpi-row">
+<div class="kpi-card"><div class="kpi-label">Toplam Bildirim</div><div class="kpi-value" id="mudurKpiMutabik">0</div></div>
+<div class="kpi-card"><div class="kpi-label">Açık Bildirim</div><div class="kpi-value" id="mudurKpiAcik">0</div></div>
+<div class="kpi-card"><div class="kpi-label">Kapandı</div><div class="kpi-value" id="mudurKpiBeklemede">0</div></div>
+<div class="kpi-card"><div class="kpi-label">Toplam Eksik</div><div class="kpi-value" id="mudurKpiEksik">0</div></div>
+<div class="kpi-card"><div class="kpi-label">Toplam Fazla</div><div class="kpi-value" id="mudurKpiFazla">0</div></div>
+<div class="kpi-card"><div class="kpi-label">Mutabık Kalınmayan Toplam Eksik</div><div class="kpi-value" id="mudurKpiMutabikDegilEksik">0</div></div>
+<div class="kpi-card"><div class="kpi-label">Bugün Açılan</div><div class="kpi-value" id="mudurKpiToday">0</div></div>
+<div class="kpi-card"><div class="kpi-label">Silinen</div><div class="kpi-value" id="mudurKpiDeleted">0</div></div>
+</div>
+<div class="mudur-hint">
+    Yönetici paneli sadece görüntüleme içindir. Detaylı analiz ve Excel çıktı için <b>Raporlar</b> sekmesini kullan.
+  </div>
+<!-- 2) Acil durumlar + 4) Bugün ne oldu -->
+<div class="dash-grid-2">
+<div class="dash-card">
+<div class="dash-card-title">🔴 7+ Gün Açık / Beklemede</div>
+<div class="dash-card-sub">Öncelik verilmesi gereken kayıtlar</div>
+<div class="table-wrap small">
+<table class="mini-table">
+<thead><tr><th>Şube</th>
+<th>Çıkış Depo</th>
+<th>Ürün</th>
+<th>Eksik</th>
+<th>Fazla</th>
+<th>Gün</th>
+</tr></thead>
+<tbody id="mudurOverdueTbody"></tbody>
+</table>
+</div>
+<div class="dash-card-actions">
+<button class="btn btn-mini" data-quick-nav="page-bildirimler">Açık Bildirimleri Gör</button>
+</div>
+</div>
+<div class="dash-card">
+<div class="dash-card-title">🕒 Bugün Ne Oldu?</div>
+<div class="dash-card-sub">Günlük aktivite özeti</div>
+<div class="today-grid">
+<div class="today-item"><div class="today-label">Bugün Açılan</div><div class="today-val" id="mudurTodayOpened">0</div></div>
+<div class="today-item"><div class="today-label">Bugün Mutabık</div><div class="today-val" id="mudurTodayClosed">0</div></div>
+<div class="today-item"><div class="today-label">Bugün Silinen</div><div class="today-val" id="mudurTodayDeleted">0</div></div>
+<div class="today-item"><div class="today-label">Bugün Ekli</div><div class="today-val" id="mudurTodayAttachments">0</div></div>
+</div>
+</div>
+</div>
+<!-- 3) Şube dağılımı -->
+<div class="dash-card">
+<div class="dash-card-title">📊 Şubelere Göre Açık/Beklemede Dağılım</div>
+<div class="dash-card-sub">Sadece Açık + Beklemede kayıtlar</div>
+<div class="chart-wrap">
+<canvas height="90" id="mudurChartOpenByBranch"></canvas>
+</div>
+</div>
+<!-- 5) Problemliler + 6) Cevapsız notlar -->
+<div class="dash-grid-2">
+<div class="dash-card">
+<div class="dash-card-title">⚠️ En Problemli Ürünler / Partiler</div>
+<div class="dash-card-sub">Top 5 (toplam sapmaya göre)</div>
+<div class="dash-split">
+<div>
+<div class="mini-title">Ürünler</div>
+<div class="table-wrap small">
+<table class="mini-table">
+<thead><tr><th>Ürün</th><th>Bild.</th><th>Sapma</th></tr></thead>
+<tbody id="mudurTopUrunTbody"></tbody>
+</table>
+</div>
+</div>
+<div>
+<div class="mini-title">Partiler</div>
+<div class="table-wrap small">
+<table class="mini-table">
+<thead><tr><th>Parti</th><th>Bild.</th><th>Sapma</th></tr></thead>
+<tbody id="mudurTopPartiTbody"></tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+<div class="dash-card">
+<div class="dash-card-title">💬 Cevapsız Kalan Notlar</div>
+<div class="dash-card-sub">Son not tarihi eski olan kayıtlar</div>
+<div class="table-wrap small">
+<table class="mini-table">
+<thead><tr><th>Bildirim</th><th>Şube</th><th>Son Not</th><th>Gün</th></tr></thead>
+<tbody id="mudurUnansweredTbody"></tbody>
+</table>
+</div>
+<div class="dash-card-actions">
+<button class="btn btn-mini" data-quick-nav="page-mudur-depo-takip">Depo Takibe Git</button>
+</div>
+</div>
+</div>
+
+</div>
+<!-- MÜDÜR: Şube Performansı -->
+<!-- Mutabakat Oranı kaldırıldı -->
+<!-- MÜDÜR: Top 20 -->
+<div class="page hidden" id="page-mudur-stok">
+<h2>Top 20</h2>
+<button class="mb-2 btn btn-secondary btn-export-top20 btn-sm" id="btnExportTop20" onclick="exportMudurStokToCSV()">Excel'e Aktar (Top 20)</button>
+<div class="top20-grid">
+
+  <div class="top20-card card">
+    <div class="card-body">
+      <h5 class="card-title">En Fazla Bildirimi Yapılan Ürünler</h5>
+      <div class="table-responsive top20-table-container">
+        <table class="table table-sm table-striped align-middle" id="tblMudurTopUrun">
+          <thead class="table-light">
+            <tr>
+              <th>Ürün</th>
+              <th class="text-end">Bildirim</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="top20-card card">
+    <div class="card-body">
+      <h5 class="card-title">En Fazla Bildirilmiş Partiler</h5>
+      <div class="table-responsive top20-table-container">
+        <table class="table table-sm table-striped align-middle" id="tblMudurTopParti">
+          <thead class="table-light">
+            <tr>
+              <th>Parti No</th>
+              <th class="text-end">Bildirim</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="top20-card card">
+    <div class="card-body">
+      <h5 class="card-title">En Fazla Bildirim Yapan Şubeler</h5>
+      <div class="table-responsive top20-table-container">
+        <table class="table table-sm table-striped align-middle" id="tblMudurTopSube">
+          <thead class="table-light">
+            <tr>
+              <th>Şube</th>
+              <th class="text-end">Bildirim</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+<div class="page hidden" id="page-mudur-depo-takip">
+  <div class="depo-header">
+    <h2 class="depo-title">Depo Takip</h2>
+    <div class="depo-subtitle">Tablodaki depolar Besleme yapan depolardır ve tablo besleme yapan depolara gelen bildirimleri göstermektedir.</div>
+  </div>
+
+  <div class="depo-grid">
+    <div class="depo-card">
+      <div class="depo-card-head">
+        <div class="depo-card-title">Kayseri & Merkez Depo Performansı</div>
+        <div class="depo-card-desc">Tablodaki depolar Besleme yapan depolardır ve tablo besleme yapan depolara gelen bildirimleri göstermektedir.</div>
+      </div>
+      <div class="table-wrap depo-table-wrap">
+        <table class="tbl depo-tbl">
+          <thead>
+            <tr>
+              <th>Depo</th>
+              <th class="text-end">Toplam Bildirim</th>
+              <th class="text-end">Cevaplanmış</th>
+              <th class="text-end">Cevap Bekleyen</th>
+              <th class="text-end">Cevaplama Oranı</th>
+              <th class="text-end">Ort. Cevap Süresi</th>
+            </tr>
+          </thead>
+          <tbody id="tblMudurDepoTakip"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="depo-card">
+      <div class="depo-card-head">
+        <div class="depo-card-title">Stok Kontrol Performansı</div>
+        <div class="depo-card-desc">Stok kontrol ekibinin cevap oranı ve kapatılan bildirim sayısı.</div>
+      </div>
+      <div class="table-wrap depo-table-wrap">
+        <table class="tbl depo-tbl">
+          <thead>
+            <tr>
+              <th>Kapsam</th>
+              <th class="text-end">Toplam Bildirim</th>
+              <th class="text-end">Cevaplanmış</th>
+              <th class="text-end">Cevap Bekleyen</th>
+              <th class="text-end">Cevaplama Oranı</th>
+              <th class="text-end">Kapatılan</th>
+            </tr>
+          </thead>
+          <tbody id="tblMudurStokKontrolPerf"></tbody>
+        </table>
+      </div>
+
+      <div class="depo-note">
+        <span class="depo-note-label">Bilgi:</span>
+        <code>Diğer cep şubeler Fazla 040 besleme yapmadığı için eklenmemişlerdir.</code>
+      </div>
+    </div>
+
+    <div class="depo-card">
+      <div class="depo-card-head">
+        <div class="depo-card-title">Mutabakat Oranı (Şubelere Göre)</div>
+        <div class="depo-card-desc">Şube bazında mutabakat oranı özetleri.</div>
+      </div>
+      <div class="table-wrap depo-table-wrap">
+        <table class="tbl depo-tbl">
+          <thead>
+            <tr>
+              <th>Şube</th>
+              <th class="text-end">Toplam Bildirim</th>
+              <th class="text-end">Açık</th>
+              <th class="text-end">Beklemede</th>
+              <th class="text-end">Mutabık</th>
+              <th class="text-end">Mutabakat Oranı</th>
+</tr>
+          </thead>
+          <tbody id="tblMudurSubePerf"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="depo-card depo-card-compact">
+      <div class="depo-card-head">
+        <div class="depo-card-title">Şubelere Göre Son Bildirim Tarihi</div>
+        <div class="depo-card-desc">Şubenin sisteme bıraktığı son bildirim tarihi listelenir.</div>
+      </div>
+      <div class="table-wrap depo-table-wrap depo-table-wrap-compact">
+        <table class="tbl depo-tbl depo-tbl-compact">
+          <thead>
+            <tr>
+              <th>Şube</th>
+              <th class="text-end">Son Bildirim Tarihi</th>
+              <th class="text-end">Kaç Gündür Bildirim Yapmadı</th>
+            </tr>
+          </thead>
+          <tbody id="tblMudurSonBildirim"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<div class="page hidden" id="page-raporlar">
+<h1>Raporlar</h1>
+<div class="page-subtitle" id="raporSubTitle">Özet raporlar.</div>
+<button class="secondary" onclick="exportBildirimlerToCSV()" style="margin-bottom:16px;font-size:12px;padding:6px 10px;">Excel'e Aktar (Raporlar)</button>
+<div class="kpi-row">
+<div class="kpi-card">
+<div class="kpi-label">Toplam Bildirim</div>
+<div class="kpi-value" id="kpiToplam">0</div>
+<div class="kpi-desc">Seçili kapsamda toplam kayıt.</div>
+</div>
+<div class="kpi-card">
+<div class="kpi-label">Açık Bildirim</div>
+<div class="kpi-value" id="kpiAcik">0</div>
+<div class="kpi-desc">Durumu halen <strong>açık</strong> olan kayıtlar.</div>
+</div>
+<div class="kpi-card">
+<div class="kpi-label">Beklemede Mutabakat</div>
+<div class="kpi-value" id="kpiBeklemede">0</div>
+<div class="kpi-desc">Mutabakatı henüz tamamlanmamış kayıtlar.</div>
+</div>
+<div class="kpi-card">
+<div class="kpi-label">Kapanan Bildirim</div>
+<div class="kpi-value" id="kpiKapali">0</div>
+<div class="kpi-desc">Durumu <strong>kapandı</strong> olan bildirimler.</div>
+</div>
+<div class="kpi-card">
+<div class="kpi-label">3+ Gün Açık Bildirim</div>
+<div class="kpi-value" id="kpiAcik3Gun">0</div>
+<div class="kpi-desc">Durumu <strong>Açık</strong> olup 3 gün ve üzeri bekleyen bildirim sayısı.</div>
+</div>
+</div>
+<div class="card">
+<div class="chart-row">
+<div class="chart-card">
+<div class="kpi-label">Şubelere Göre Bildirim Dağılımı</div>
+<canvas id="chartByBranch"></canvas>
+</div>
+<div class="chart-card">
+<div class="kpi-label">Eksik / Fazla Dağılımı</div>
+<canvas id="chartByStatus"></canvas>
+</div>
+<div class="chart-card">
+<div class="kpi-label">7 Günlük Bildirim Trendi</div>
+<canvas id="chartTrend"></canvas>
+</div>
+<div class="chart-card">
+<div class="kpi-label">Depolara Göre Çıkış Dağılımı</div>
+<canvas id="chartByDepo"></canvas>
+</div>
+</div>
+</div>
+<div class="card">
+<div class="kpi-label" style="margin-bottom:8px;">Stok Açıklamasına Göre Özet Pivot</div>
+<div style="overflow-x:auto;">
+<table class="pivot-table" id="pivotTable">
+<!-- JS ile doldurulacak -->
+</table>
+</div>
+<div class="small-text" style="margin-top:6px;">
+            Şube rolünde sadece kendi şubenizin, merkez / stok rolünde tüm şubelerin verileri gösterilir.
+          </div>
+</div>
+</div>
+<!-- ŞUBE: YENİ BİLDİRİM -->
+<div class="page hidden page-container" id="page-yeni-bildirim">
+<h1>Yeni Bildirim</h1>
+<div class="page-subtitle subtext">Şubeniz için eksik / fazla bildirim oluşturun.</div>
+<div class="nb-split">
+<!-- Bildirim Bilgileri -->
+<div class="card">
+<div class="card-title">Bildirim Bilgileri</div>
+<form id="formYeni">
+<!-- Şube alanı sabit (kullanıcının rolüne kilitli); görünürde yer kaplamasın
+     diye gizlendi ama input DOM'da kalıyor — JS hâlâ değerini set ediyor ve
+     gönderimde currentSube kullanılıyor. -->
+<input id="nbSube" readonly="" type="hidden"/>
+<div class="flex">
+<div class="flex-1">
+<label>Çıkış Depo
+                  <select id="nbCikisDepo">
+<option value="Merkez Depo">Merkez Depo</option>
+<option value="Kayseri Depo">Kayseri Depo</option>
+<option value="İZMİR">İZMİR</option>
+<option value="ANADOLU">ANADOLU</option>
+<option value="TRAKYA">TRAKYA</option>
+<option value="TRF transfer">TRF transfer</option>
+<option value="BURSA">BURSA</option>
+<option value="ANKARA">ANKARA</option>
+<option value="DİYARBAKIR">DİYARBAKIR</option>
+<option value="ANTALYA">ANTALYA</option>
+<option value="KONYA">KONYA</option>
+<option value="ERZURUM">ERZURUM</option>
+<option value="SAMSUN">SAMSUN</option>
+<option value="GAZİANTEP">GAZİANTEP</option>
+<option value="ADANA">ADANA</option>
+<option value="Müşteriden Gelen">Müşteriden Gelen</option>
+<option value="Tedarikçiden Gelen">Tedarikçiden Gelen</option>
+<option value="Sayım / Raf Fazlası">Sayım / Raf Fazlası</option>
+<option value="Merkez Malkabul">Merkez Malkabul</option>
+</select>
+</label>
+</div>
+<div class="flex-1">
+<label>Parti / Sevk No
+                  <input id="nbParti" placeholder="P-001"/>
+</label>
+</div>
+</div>
+<div class="flex">
+<div class="flex-2">
+<label id="nbUrunLabel">Ürün
+                  <input id="nbUrun" placeholder="BSG 30-116-217"/>
+</label>
+</div>
+<div class="flex-2" id="nbUrunAckWrap">
+<label>Ürün Açıklama
+                  <input id="nbUrunAck" placeholder="Parça açıklaması"/>
+</label>
+</div>
+</div>
+<!-- Negatif/Pozitif aktifken görünür: "Gelen Ürün" (Gelmesi Gereken Ürün'ün altında) -->
+<div id="nbNegatifPozitifFields" class="hidden">
+<div class="flex">
+<div class="flex-2">
+<label>Gelen Ürün
+                  <input id="nbGelenUrun" placeholder="Gelen ürün"/>
+</label>
+</div>
+<div class="flex-2"></div>
+</div>
+</div>
+<div class="flex">
+<div class="flex-1">
+<label>Eksik Adet
+                  <input id="nbEksik" min="0" type="number" value="0"/>
+</label>
+</div>
+<div class="flex-1">
+<label>Fazla Adet
+                  <input id="nbFazla" min="0" type="number" value="0"/>
+</label>
+</div>
+</div>
+<label>Şube Açıklaması
+              <textarea id="nbSubeAck" placeholder="Açıklama..."></textarea>
+</label></form>
+</div>
+<!-- Ekler & Video -->
+<!-- Sağ sütun: üstte (kart dışında) Negatif/Pozitif, altında Ekler & Video kartı -->
+<div class="nb-right-col">
+<!-- Negatif/Pozitif — Ekler & Video kartının ÜSTÜNDE, kart dışında -->
+<div class="np-toggle-bar">
+<button class="btn btn-secondary" id="btnNegatifPozitif" type="button">Negatif/Pozitif</button>
+<div class="small-text" id="nbNegatifPozitifInfo">Aktif değil.</div>
+</div>
+<div class="card" style="margin-bottom:0;">
+<div class="card-title">Ekler &amp; Video</div>
+<div class="form-group">
+<label>Ek Dosya (PDF, Excel, Görsel)</label>
+<input accept="image/*,application/pdf,.xls,.xlsx,.csv" class="form-control" id="nbFile" multiple="" type="file"/>
+<div class="small-text" id="nbFileList"></div>
+<div aria-live="polite" class="upload-progress hidden" id="uploadProgressWrap">
+<div class="upload-progress-bar" id="uploadProgressBar"></div>
+<div class="upload-progress-text" id="uploadProgressText"></div>
+</div>
+</div>
+<div class="form-group" style="margin-top:12px;">
+<label for="nbVideoLink">Video Linki (OneDrive)</label>
+<input class="form-control" id="nbVideoLink" placeholder="https://..." type="url"/>
+<div class="help-text">Videoyu OneDrive’a yükleyip paylaşım linkini buraya yapıştır.</div>
+</div>
+<div class="small-text" id="bulkExcelStatus" style="margin-top:10px;"></div>
+</div>
+<!-- Aksiyon çubuğu — Ekler & Video kartının altına (sağ sütun) taşındı -->
+<div class="sticky-actions nb-actions">
+<div class="actions-left">
+<a download="" href="./ornek_bildirim_sablon.xlsx">Örnek Excel İndir</a>
+</div>
+<div class="actions-right">
+<input accept=".xlsx" id="bulkExcelInput" style="display:none;" type="file"/>
+<button class="btn btn-secondary" id="bulkExcelSelectBtn" type="button" title="Excel seçersen Bildirimi Gönder toplu gönderir (Max 50)">Excel Seç (Toplu)</button>
+<button class="btn btn-secondary" id="bulkExcelUploadBtn" type="button" style="display:none;">Excel'den Toplu Gönder (Max 50)</button>
+<button class="btn btn-primary" form="formYeni" type="submit">Bildirimi Gönder</button>
+</div>
+</div>
+</div><!-- /.nb-right-col -->
+</div><!-- /.nb-split -->
+</div>
+<!-- BİLDİRİMLER
+      <!-- ŞUBE: GELEN BİLDİRİMLER -->
+<div class="page hidden" id="page-gelen-bildirimler">
+<h1>Gelen Bildirimler</h1>
+<div class="page-subtitle">Diğer şubelerden, çıkış deposu şubeniz olacak şekilde açılan bildirimler listelenir.</div>
+<div class="flex" id="gelenSplit">
+<div class="flex-1 gelenListeWrapper">
+<div class="card">
+<div class="flex filter-row">
+<div>
+<label>Gönderen Şube
+                    <select id="fltGelenSube" onchange="refreshGelenBildirimler()">
+<option value="tum">Tümü</option>
+<option value="İZMİR">İZMİR</option>
+<option value="ANADOLU">ANADOLU</option>
+<option value="TRAKYA">TRAKYA</option>
+<option value="TRF transfer">TRF transfer</option>
+<option value="BURSA">BURSA</option>
+<option value="ANKARA">ANKARA</option>
+<option value="DİYARBAKIR">DİYARBAKIR</option>
+<option value="ANTALYA">ANTALYA</option>
+<option value="KONYA">KONYA</option>
+<option value="ERZURUM">ERZURUM</option>
+<option value="SAMSUN">SAMSUN</option>
+<option value="GAZİANTEP">GAZİANTEP</option>
+<option value="ADANA">ADANA</option>
+<option value="MAL KABUL">MAL KABUL</option>
+<option value="KAYSERİ DEPO">KAYSERİ DEPO</option>
+</select>
+</label>
+</div>
+<div>
+<label>Çıkış Depo
+                    <select id="fltGelenCikisDepo" onchange="refreshGelenBildirimler()">
+<option value="tum">Tümü</option>
+<option value="Merkez Depo">Merkez Depo</option>
+<option value="Kayseri Depo">Kayseri Depo</option>
+<option value="İZMİR">İZMİR</option>
+<option value="ANADOLU">ANADOLU</option>
+<option value="TRAKYA">TRAKYA</option>
+<option value="TRF transfer">TRF transfer</option>
+<option value="BURSA">BURSA</option>
+<option value="ANKARA">ANKARA</option>
+<option value="DİYARBAKIR">DİYARBAKIR</option>
+<option value="ANTALYA">ANTALYA</option>
+<option value="KONYA">KONYA</option>
+<option value="ERZURUM">ERZURUM</option>
+<option value="SAMSUN">SAMSUN</option>
+<option value="GAZİANTEP">GAZİANTEP</option>
+<option value="ADANA">ADANA</option>
+<option value="Müşteriden Gelen">Müşteriden Gelen</option>
+<option value="Tedarikçiden Gelen">Tedarikçiden Gelen</option>
+<option value="Sayım / Raf Fazlası">Sayım / Raf Fazlası</option>
+<option value="Merkez Malkabul">Merkez Malkabul</option>
+</select>
+</label>
+</div>
+<div>
+<label>Durum
+                    <select id="fltGelenDurum" onchange="refreshGelenBildirimler()">
+<option value="tum">Tümü</option>
+<option value="Açık">Açık</option>
+<option value="Kapandı">Kapandı</option>
+<option value="İnceleniyor">İnceleniyor</option>
+</select>
+</label>
+</div>
+<div>
+<label>Mutabakat
+                    <select id="fltGelenMutabakat" onchange="refreshGelenBildirimler()">
+<option value="tum">Tümü</option>
+<option value="Beklemede">Beklemede</option>
+<option value="Görüşülüyor">Görüşülüyor</option>
+<option value="Mutabık">Mutabık</option>
+<option value="Mutabık Değil">Mutabık Değil</option>
+</select>
+</label>
+</div>
+<div class="filter-inline-action">
+<label>Stok Açıklama
+                    <select id="fltGelenStokAck" onchange="refreshGelenBildirimler()">
+<option value="tum">Tümü</option>
+<option value="Depodan eksik gönderim tespit edildi.">Depodan eksik gönderim tespit edildi.</option>
+<option value="Fazla transferi yapıldı.">Fazla transferi yapıldı.</option>
+<option value="Gönderildiği tespit edildi.">Gönderildiği tespit edildi.</option>
+<option value="Kameradan kontrol sağlanamıyor.">Kameradan kontrol sağlanamıyor.</option>
+<option value="Farklı partiden raflanmış.">Farklı partiden raflanmış.</option>
+<option value="Geri çekildi.">Geri çekildi.</option>
+<option value="Şubede tespit edildi.">Şubede tespit edildi.</option>
+<option value="Yanlış şubeye gönderildi.">Yanlış şubeye gönderildi.</option>
+<option value="Negatif/Pozitif yapıldı.">Negatif/Pozitif yapıldı.</option>
+<option value="Geç bildirim.">Geç bildirim.</option>
+</select>
+</label>
+<button class="secondary btn-export" onclick="exportGelenToCSV()">Excel\'e Aktar</button>
+</div>
+</div>
+<div class="filter-tools">
+<div class="filter-tools-left">
+<div class="filter-count" id="countGelen">0 kayıt</div>
+<button id="btnToggleBulkSelectModeGelen" class="bulk-page-toggle-btn" type="button" onclick="toggleBulkSelectMode()">Toplu seçim</button>
+</div>
+</div>
+<div class="table-scroll autoheight" style="border:1px solid #e5e7eb;border-radius:8px;">
+<table>
+<thead>
+<tr>
+<th class="bulk-select-col"><input id="bulkGelenSelectAll" class="bulk-check bulk-select-all-cb" type="checkbox" title="Görünen kayıtları seç" onchange="toggleAllVisibleMerkezSelections(this.checked)"/></th>
+<th>Bildir. Tarihi</th>
+<th>Gönderen Şube</th>
+<th>Çıkış Depo</th>
+<th>Parti No</th>
+<th>Ürün</th>
+<th>Ürün Açıklama</th>
+<th>Eksik</th>
+<th>Fazla</th>
+<th>Durum</th>
+<th>Mutabakat</th>
+<th>Stok Kontrol Açıklama</th>
+<th>İlgili Şube Açıklama</th>
+</tr>
+</thead>
+<tbody id="tblGelenBildirimler">
+<!-- JS -->
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="flex-3" id="gelenDetayWrapper">
+<div class="card detail-autoheight" id="gelenDetayPanel">
+<strong>Bir bildirim seçiniz</strong>
+<p class="small-text">Soldan kaydı seçin.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="page hidden" id="page-bildirimler">
+<h1 id="bildirimlerTitle">Bildirimler</h1>
+<div class="page-subtitle" id="bildirimlerSubTitle">Bildirim listesi.</div>
+<div class="flex">
+<div class="flex-2">
+<div class="card">
+<div class="flex filter-row">
+<div id="fltSubeWrapper">
+<label>Şube
+                    <select id="fltSube" onchange="refreshTable()">
+<option value="tum">Tümü</option>
+</select>
+</label>
+</div>
+<div>
+<label>Çıkış Depo
+                    <select id="fltCikisDepo" onchange="refreshTable()">
+<option value="tum">Tümü</option>
+<option value="Merkez Depo">Merkez Depo</option>
+<option value="Kayseri Depo">Kayseri Depo</option>
+<option value="İZMİR">İZMİR</option>
+<option value="ANADOLU">ANADOLU</option>
+<option value="TRAKYA">TRAKYA</option>
+<option value="TRF transfer">TRF transfer</option>
+<option value="BURSA">BURSA</option>
+<option value="ANKARA">ANKARA</option>
+<option value="DİYARBAKIR">DİYARBAKIR</option>
+<option value="ANTALYA">ANTALYA</option>
+<option value="KONYA">KONYA</option>
+<option value="ERZURUM">ERZURUM</option>
+<option value="SAMSUN">SAMSUN</option>
+<option value="GAZİANTEP">GAZİANTEP</option>
+<option value="ADANA">ADANA</option>
+<option value="Müşteriden Gelen">Müşteriden Gelen</option>
+<option value="Tedarikçiden Gelen">Tedarikçiden Gelen</option>
+<option value="Sayım / Raf Fazlası">Sayım / Raf Fazlası</option>
+<option value="Merkez Malkabul">Merkez Malkabul</option>
+</select>
+</label>
+</div>
+<div>
+<label>Durum
+                    <select id="fltDurum" onchange="refreshTable()">
+<option value="tum">Tümü</option>
+<option value="Açık">Açık</option>
+<option value="Kapandı">Kapandı</option>
+<option value="İnceleniyor">İnceleniyor</option>
+</select>
+</label>
+</div>
+<div>
+<label>Mutabakat
+                    <select id="fltMutabakat" onchange="refreshTable()">
+<option value="tum">Tümü</option>
+<option value="Beklemede">Beklemede</option>
+<option value="Görüşülüyor">Görüşülüyor</option>
+<option value="Mutabık">Mutabık</option>
+<option value="Mutabık Değil">Mutabık Değil</option>
+</select>
+</label>
+</div>
+<div class="filter-inline-action">
+<label>Stok Açıklama
+                    <select id="fltStokAck" onchange="refreshTable()">
+<option value="tum">Tümü</option>
+<option value="Depodan eksik gönderim tespit edildi.">Depodan eksik gönderim tespit edildi.</option>
+<option value="Fazla transferi yapıldı.">Fazla transferi yapıldı.</option>
+<option value="Gönderildiği tespit edildi.">Gönderildiği tespit edildi.</option>
+<option value="Kameradan kontrol sağlanamıyor.">Kameradan kontrol sağlanamıyor.</option>
+<option value="Farklı partiden raflanmış.">Farklı partiden raflanmış.</option>
+<option value="Geri çekildi.">Geri çekildi.</option>
+<option value="Şubede tespit edildi.">Şubede tespit edildi.</option>
+<option value="Yanlış şubeye gönderildi.">Yanlış şubeye gönderildi.</option>
+<option value="Negatif/Pozitif yapıldı.">Negatif/Pozitif yapıldı.</option>
+<option value="Geç bildirim.">Geç bildirim.</option>
+</select>
+</label>
+<button class="secondary btn-export" onclick="exportBildirimlerToCSV()">Excel'e Aktar</button>
+</div>
+</div>
+<div class="filter-tools">
+<div class="filter-tools-left">
+<div class="filter-count" id="countBildirimler">0 kayıt</div>
+<button id="btnToggleBulkSelectMode" class="bulk-merkez-col bulk-select-toggle-btn" type="button" onclick="toggleBulkSelectMode()">Toplu seçim</button>
+<button id="btnStokAckFilter" class="stok-ack-filter-btn" type="button" onclick="toggleStokAckFilter()">Açıklama eklenenler</button>
+</div>
+<div id="bildirimQuickFilterInfo" class="quick-filter-info hidden" aria-live="polite"></div>
+<button id="btnClearBildirimFilters" class="secondary btn-export hidden" type="button" onclick="clearAllBildirimFilters()">Filtreleri Temizle</button>
+</div>
+<div class="table-scroll autoheight" style="border:1px solid #e5e7eb;border-radius:8px;">
+<table>
+<thead>
+<tr>
+<th class="bulk-merkez-col bulk-select-col">
+<input id="bulkMerkezSelectAll" class="bulk-check bulk-select-all-cb" type="checkbox" title="Görünen kayıtları seç" onchange="toggleAllVisibleMerkezSelections(this.checked)"/>
+</th>
+<th>Bildir. Tarihi</th>
+<th>Şube</th>
+<th>Çıkış Depo</th>
+<th>Parti No</th>
+<th>Ürün</th>
+<th>Ürün Açıklama</th>
+<th>Eksik</th>
+<th>Fazla</th>
+<th>Durum</th>
+<th>Mutabakat</th>
+<th>Stok Kontrol Açıklama</th>
+<th class="col-kayseri-ack">İlgili Şube Açıklama</th>
+</tr>
+</thead>
+<tbody id="tblBildirimler">
+<!-- JS -->
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="flex-1">
+<div class="card detail-autoheight" id="detayPanel">
+<strong>Bir bildirim seçiniz</strong>
+<p class="small-text">Soldan kaydı seçin.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- KAYSERİ DEPO: YAPILAN BİLDİRİMLER -->
+<div class="page hidden" id="page-malkabul-yapilan">
+<h1>Yapılan Bildirimler</h1>
+<div class="page-subtitle">Merkez Malkabul tarafından <strong>Şube = MAL KABUL</strong> olarak açılan bildirimler listelenir.</div>
+<div class="flex">
+<div class="flex-2">
+<div class="card">
+<div class="flex filter-row">
+<div>
+<label>Çıkış Depo
+                    <select id="fltMalkabulCikisDepo" onchange="refreshMalkabulYapilanTable()">
+<option value="tum">Tümü</option>
+<option value="Merkez Depo">Merkez Depo</option>
+<option value="Merkez Malkabul">Merkez Malkabul</option>
+<option value="İZMİR">İZMİR</option>
+<option value="ANADOLU">ANADOLU</option>
+<option value="TRAKYA">TRAKYA</option>
+<option value="TRF transfer">TRF transfer</option>
+<option value="BURSA">BURSA</option>
+<option value="ANKARA">ANKARA</option>
+<option value="DİYARBAKIR">DİYARBAKIR</option>
+<option value="ANTALYA">ANTALYA</option>
+<option value="KONYA">KONYA</option>
+<option value="ERZURUM">ERZURUM</option>
+<option value="SAMSUN">SAMSUN</option>
+<option value="GAZİANTEP">GAZİANTEP</option>
+<option value="ADANA">ADANA</option>
+<option value="Müşteriden Gelen">Müşteriden Gelen</option>
+<option value="Tedarikçiden Gelen">Tedarikçiden Gelen</option>
+<option value="Sayım / Raf Fazlası">Sayım / Raf Fazlası</option>
+<option value="Merkez Malkabul">Merkez Malkabul</option>
+</select>
+</label>
+</div>
+<div>
+<label>Durum
+                    <select id="fltMalkabulDurum" onchange="refreshMalkabulYapilanTable()">
+<option value="tum">Tümü</option>
+<option value="Açık">Açık</option>
+<option value="Kapandı">Kapandı</option>
+<option value="İnceleniyor">İnceleniyor</option>
+</select>
+</label>
+</div>
+<div>
+<label>Mutabakat
+                    <select id="fltMalkabulMutabakat" onchange="refreshMalkabulYapilanTable()">
+<option value="tum">Tümü</option>
+<option value="Beklemede">Beklemede</option>
+<option value="Görüşülüyor">Görüşülüyor</option>
+<option value="Mutabık">Mutabık</option>
+<option value="Mutabık Değil">Mutabık Değil</option>
+</select>
+</label>
+</div>
+<div>
+<label>Stok Açıklama
+                    <select id="fltMalkabulStokAck" onchange="refreshMalkabulYapilanTable()">
+<option value="tum">Tümü</option>
+<option value="Depodan eksik gönderim tespit edildi.">Depodan eksik gönderim tespit edildi.</option>
+<option value="Fazla transferi yapıldı.">Fazla transferi yapıldı.</option>
+<option value="Gönderildiği tespit edildi.">Gönderildiği tespit edildi.</option>
+<option value="Kameradan kontrol sağlanamıyor.">Kameradan kontrol sağlanamıyor.</option>
+<option value="Farklı partiden raflanmış.">Farklı partiden raflanmış.</option>
+<option value="Geri çekildi.">Geri çekildi.</option>
+<option value="Şubede tespit edildi.">Şubede tespit edildi.</option>
+<option value="Yanlış şubeye gönderildi.">Yanlış şubeye gönderildi.</option>
+<option value="Negatif/Pozitif yapıldı.">Negatif/Pozitif yapıldı.</option>
+<option value="Geç bildirim.">Geç bildirim.</option>
+</select>
+</label>
+</div>
+</div>
+<button class="secondary" onclick="exportMalkabulYapilanToCSV()" style="margin-left:20px;font-size:12px;padding:6px 10px;">Excel'e Aktar</button>
+<div class="filter-tools">
+<div class="filter-tools-left">
+<div class="small-text">Bu listede sadece Merkez Malkabul kullanıcısının kendi oluşturduğu bildirimler gösterilir.</div>
+<button id="btnToggleBulkSelectModeMalkabul" class="bulk-page-toggle-btn" type="button" onclick="toggleBulkSelectMode()">Toplu seçim</button>
+</div>
+</div>
+<div class="table-scroll autoheight" style="border:1px solid #e5e7eb;border-radius:8px;">
+<table>
+<thead>
+<tr>
+<th class="bulk-select-col"><input id="bulkMalkabulSelectAll" class="bulk-check bulk-select-all-cb" type="checkbox" title="Görünen kayıtları seç" onchange="toggleAllVisibleMerkezSelections(this.checked)"/></th>
+<th>Bildir. Tarihi</th>
+<th>Şube</th>
+<th>Çıkış Depo</th>
+<th>Parti No</th>
+<th>Ürün</th>
+<th>Ürün Açıklama</th>
+<th>Eksik</th>
+<th>Fazla</th>
+<th>Durum</th>
+<th>Mutabakat</th>
+<th>Stok Kontrol Açıklama</th>
+<th class="col-kayseri-ack">İlgili Şube Açıklama</th>
+</tr>
+</thead>
+<tbody id="tblMalkabulYapilan">
+<!-- JS -->
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="flex-1">
+<div class="card detail-autoheight" id="detayPanelMalkabul">
+<strong>Bir bildirim seçiniz</strong>
+<p class="small-text">Soldan kaydı seçin.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="page hidden" id="page-kayseri-yapilan">
+<h1>Yapılan Bildirimler</h1>
+<div class="page-subtitle">Kayseri Depo tarafından <strong>Şube = KAYSERİ DEPO</strong> olarak açılan bildirimler listelenir.</div>
+<div class="flex">
+<div class="flex-2">
+<div class="card">
+<div class="flex filter-row">
+<div>
+<label>Çıkış Depo
+                    <select id="fltKayseriCikisDepo" onchange="refreshKayseriYapilanTable()">
+<option value="tum">Tümü</option>
+<option value="Merkez Depo">Merkez Depo</option>
+<option value="Kayseri Depo">Kayseri Depo</option>
+<option value="İZMİR">İZMİR</option>
+<option value="ANADOLU">ANADOLU</option>
+<option value="TRAKYA">TRAKYA</option>
+<option value="TRF transfer">TRF transfer</option>
+<option value="BURSA">BURSA</option>
+<option value="ANKARA">ANKARA</option>
+<option value="DİYARBAKIR">DİYARBAKIR</option>
+<option value="ANTALYA">ANTALYA</option>
+<option value="KONYA">KONYA</option>
+<option value="ERZURUM">ERZURUM</option>
+<option value="SAMSUN">SAMSUN</option>
+<option value="GAZİANTEP">GAZİANTEP</option>
+<option value="ADANA">ADANA</option>
+<option value="Müşteriden Gelen">Müşteriden Gelen</option>
+<option value="Tedarikçiden Gelen">Tedarikçiden Gelen</option>
+<option value="Sayım / Raf Fazlası">Sayım / Raf Fazlası</option>
+<option value="Merkez Malkabul">Merkez Malkabul</option>
+</select>
+</label>
+</div>
+<div>
+<label>Durum
+                    <select id="fltKayseriDurum" onchange="refreshKayseriYapilanTable()">
+<option value="tum">Tümü</option>
+<option value="Açık">Açık</option>
+<option value="Kapandı">Kapandı</option>
+<option value="İnceleniyor">İnceleniyor</option>
+</select>
+</label>
+</div>
+<div>
+<label>Mutabakat
+                    <select id="fltKayseriMutabakat" onchange="refreshKayseriYapilanTable()">
+<option value="tum">Tümü</option>
+<option value="Beklemede">Beklemede</option>
+<option value="Görüşülüyor">Görüşülüyor</option>
+<option value="Mutabık">Mutabık</option>
+<option value="Mutabık Değil">Mutabık Değil</option>
+</select>
+</label>
+</div>
+<div>
+<label>Stok Açıklama
+                    <select id="fltKayseriStokAck" onchange="refreshKayseriYapilanTable()">
+<option value="tum">Tümü</option>
+<option value="Depodan eksik gönderim tespit edildi.">Depodan eksik gönderim tespit edildi.</option>
+<option value="Fazla transferi yapıldı.">Fazla transferi yapıldı.</option>
+<option value="Gönderildiği tespit edildi.">Gönderildiği tespit edildi.</option>
+<option value="Kameradan kontrol sağlanamıyor.">Kameradan kontrol sağlanamıyor.</option>
+<option value="Farklı partiden raflanmış.">Farklı partiden raflanmış.</option>
+<option value="Geri çekildi.">Geri çekildi.</option>
+<option value="Şubede tespit edildi.">Şubede tespit edildi.</option>
+<option value="Yanlış şubeye gönderildi.">Yanlış şubeye gönderildi.</option>
+<option value="Negatif/Pozitif yapıldı.">Negatif/Pozitif yapıldı.</option>
+<option value="Geç bildirim.">Geç bildirim.</option>
+</select>
+</label>
+</div>
+</div>
+<div class="filter-tools">
+<div class="filter-tools-left">
+<div class="small-text">Bu listede sadece Kayseri Depo kullanıcısının kendi oluşturduğu bildirimler gösterilir.</div>
+<button id="btnToggleBulkSelectModeKayseri" class="bulk-page-toggle-btn" type="button" onclick="toggleBulkSelectMode()">Toplu seçim</button>
+</div>
+</div>
+<div class="table-scroll autoheight" style="border:1px solid #e5e7eb;border-radius:8px;">
+<table>
+<thead>
+<tr>
+<th class="bulk-select-col"><input id="bulkKayseriSelectAll" class="bulk-check bulk-select-all-cb" type="checkbox" title="Görünen kayıtları seç" onchange="toggleAllVisibleMerkezSelections(this.checked)"/></th>
+<th>Bildir. Tarihi</th>
+<th>Şube</th>
+<th>Çıkış Depo</th>
+<th>Parti No</th>
+<th>Ürün</th>
+<th>Ürün Açıklama</th>
+<th>Eksik</th>
+<th>Fazla</th>
+<th>Durum</th>
+<th>Mutabakat</th>
+<th>Stok Kontrol Açıklama</th>
+<th class="col-kayseri-ack">İlgili Şube Açıklama</th>
+</tr>
+</thead>
+<tbody id="tblKayseriYapilan">
+<!-- JS -->
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="flex-1">
+<div class="card detail-autoheight" id="detayPanelKayseri">
+<strong>Bir bildirim seçiniz</strong>
+<p class="small-text">Soldan kaydı seçin.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- SİLİNEN BİLDİRİMLER -->
+<div class="page hidden" id="page-silinen">
+<h1>Silinen Bildirimler</h1>
+<div class="page-subtitle" id="silinenSubTitle">Silinen kayıtlar ve silme nedenleri.</div>
+<button class="secondary" onclick="exportSilinenToCSV()" style="margin-bottom:16px;font-size:12px;padding:6px 10px;">Excel'e Aktar (Silinenler)</button>
+<div class="card">
+<div class="table-scroll autoheight" style="border:1px solid #e5e7eb;border-radius:8px;">
+<table>
+<thead>
+<tr>
+<th>Bildir. Tarihi</th>
+<th>Şube</th>
+<th>Parti No</th>
+<th>Ürün</th>
+<th>Eksik</th>
+<th>Fazla</th>
+<th>Silme Nedeni</th>
+</tr>
+</thead>
+<tbody id="tblSilinen">
+<!-- JS -->
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div><!-- /#appRoot -->
+<!-- AUTH GATE (Firebase Email/Password Login) -->
+<div aria-hidden="true" id="authGate">
+<div aria-label="Giriş" aria-modal="true" class="login-glass" role="dialog">
+<h2 class="login-title">Giriş Yap</h2>
+<div class="ig">
+<span aria-hidden="true" class="ig-icon">
+<svg fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="18">
+<path d="M20 21a8 8 0 0 0-16 0"></path>
+<circle cx="12" cy="7" r="4"></circle>
+</svg>
+</span>
+<input autocomplete="username" id="authEmail" placeholder="E-posta adresi" type="email"/>
+</div>
+<div class="ig">
+<span aria-hidden="true" class="ig-icon">
+<svg fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="18">
+<rect height="11" rx="2" width="18" x="3" y="11"></rect>
+<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+</svg>
+</span>
+<input autocomplete="current-password" id="authPass" placeholder="Şifre" type="password"/>
+</div>
+<div class="opts">
+<label class="chk">
+<input id="rememberMe" type="checkbox"/>
+<span>Beni hatırla</span>
+</label>
+<button class="link" id="forgotBtn" type="button">Şifremi unuttum</button>
+</div>
+<button class="btn-dark" id="authLoginBtn" type="button">Giriş Yap</button>
+<button id="authLogoutBtn" style="display:none" type="button">Çıkış</button>
+<div aria-live="polite" class="forgot-msg" id="forgotMsg"></div>
+<div aria-live="polite" class="err" id="authErr" style="display:none;"></div>
+</div>
+<div class="login-footer">
+  <div class="login-footer-copy">© 2026 Başbuğ Tüm hakları saklıdır.</div>
+  <div class="login-footer-text">Destek için bizimle iletişime geçin</div>
+  <div class="login-footer-actions">
+    <a href="mailto:basbugsube@basbug.com.tr" class="footer-icon-link" title="E-posta" aria-label="E-posta">
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="footer-icon-svg">
+        <path d="M3 6.75A1.75 1.75 0 0 1 4.75 5h14.5A1.75 1.75 0 0 1 21 6.75v10.5A1.75 1.75 0 0 1 19.25 19H4.75A1.75 1.75 0 0 1 3 17.25V6.75zm1.9.08 6.36 4.78a1.25 1.25 0 0 0 1.48 0l6.36-4.78a.25.25 0 0 0-.15-.45H5.05a.25.25 0 0 0-.15.45zm14.6 1.32-5.86 4.4a2.75 2.75 0 0 1-3.28 0L4.5 8.15v9.1c0 .14.11.25.25.25h14.5c.14 0 .25-.11.25-.25v-9.1z"/>
+      </svg>
+    </a>
+    <a href="https://teams.microsoft.com/l/chat/48:notes/conversations?context=%7B%22contextType%22%3A%22chat%22%7D" target="_blank" rel="noopener noreferrer" class="footer-icon-link footer-icon-link-teams" title="Microsoft Teams" aria-label="Microsoft Teams">
+      <svg viewBox="0 0 32 32" aria-hidden="true" class="footer-icon-svg">
+        <path d="M20.5 9.5a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm6.5 2a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM11 7.5h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2Zm1.6 4.2v2.35h2.45v7.25h2.7v-7.25h2.45V11.7H12.6Zm13.15 1.8h3.1a1.65 1.65 0 0 1 1.65 1.65v6.2A1.65 1.65 0 0 1 28.85 23h-3.1a1.65 1.65 0 0 1-1.65-1.65v-6.2a1.65 1.65 0 0 1 1.65-1.65Z"/>
+      </svg>
+    </a>
+  </div>
+</div>
+</div>
+<!-- /AUTH GATE -->
+
+<!-- FEEDBACK MODAL -->
+<div id="feedbackModal" class="feedback-overlay hidden" aria-hidden="true">
+  <div class="feedback-card" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+    <h2 id="feedbackTitle">Sistemi değerlendirir misiniz?</h2>
+    <p class="feedback-subtitle">Puanınızı verin. İsterseniz öneri veya şikayetinizi de yazabilirsiniz.</p>
+    <div class="feedback-stars" id="feedbackStars" aria-label="5 yıldız değerlendirme">
+      <button type="button" class="feedback-star" data-star="1" aria-label="1 yıldız">★</button>
+      <button type="button" class="feedback-star" data-star="2" aria-label="2 yıldız">★</button>
+      <button type="button" class="feedback-star" data-star="3" aria-label="3 yıldız">★</button>
+      <button type="button" class="feedback-star" data-star="4" aria-label="4 yıldız">★</button>
+      <button type="button" class="feedback-star" data-star="5" aria-label="5 yıldız">★</button>
+    </div>
+    <textarea id="feedbackComment" class="feedback-textarea" placeholder="Öneriniz veya şikayetiniz varsa yazabilirsiniz"></textarea>
+    <div id="feedbackErr" class="feedback-err" aria-live="polite"></div>
+    <button id="feedbackSubmitBtn" type="button" class="btn-dark feedback-submit">Gönder</button>
+  </div>
+</div>
+<!-- /FEEDBACK MODAL -->
+
+<div aria-atomic="true" aria-live="polite" class="toast-wrap" id="toastWrap"></div>
+<!-- Dosya görüntüleyici (ek/nota ekleri için) -->
+<div aria-modal="true" class="fv-overlay hidden" id="fileViewerOverlay" role="dialog">
+<div class="fv-backdrop" onclick="closeFileViewer()"></div>
+<div class="fv-modal">
+<button aria-label="Kapat" class="fv-close" onclick="closeFileViewer()" type="button">×</button>
+<div class="fv-head">
+<div class="fv-title" id="fvTitle"></div>
+<div class="fv-actions">
+<button class="btn-mini" id="fvDownloadBtn" type="button">İndir</button>
+</div>
+</div>
+<div class="fv-body" id="fvBody"></div>
+</div>
+</div>
+<!-- Feedback Overlay -->
+<div class="fv-overlay hidden" id="feedbackOverlay">
+<div class="fv-backdrop" onclick="closeFeedbackOverlay()"></div>
+<div class="fv-modal" style="max-width:720px;">
+<button class="fv-close" onclick="closeFeedbackOverlay()" type="button">✕</button>
+<div class="fv-head">
+<div class="fv-title">Geri Bildirim</div>
+<div style="display:flex;gap:8px;align-items:center;">
+<span class="app-version" id="fbVersionLabel"></span>
+</div>
+</div>
+<div class="fv-body">
+<div class="form-grid" style="gap:10px;">
+<label>Tür
+          <select id="fbType">
+<option value="bug">Hata</option>
+<option value="iyilestirme">İyileştirme</option>
+<option value="ozellik">Yeni Özellik</option>
+<option value="diger">Diğer</option>
+</select>
+</label>
+<label>Mesaj
+          <textarea id="fbMessage" placeholder="Ne oldu / ne bekliyordunuz? (en az 5 karakter)" rows="5"></textarea>
+</label>
+<label>İletişim (opsiyonel)
+          <input id="fbContact" placeholder="Telefon / e-posta / not"/>
+</label>
+<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px;">
+<button class="secondary" onclick="closeFeedbackOverlay()" type="button">Vazgeç</button>
+<button class="primary" id="fbSendBtn" type="button">Gönder</button>
+</div>
+<div id="fbStatus" style="font-size:12px;opacity:0.85;"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- App scripts -->
+<script defer="defer" src="./firebase.js?v=jump-fix-43"></script>
+<script defer="defer" src="./auth.js?v=jump-fix-43"></script>
+<script defer="defer" src="./state.js?v=jump-fix-43"></script>
+<script defer="defer" src="./ui.js?v=jump-fix-43"></script>
+<div id="toastContainer"></div>
+
+</body>
+</html>
+

@@ -1,0 +1,2270 @@
+/* --- No-flash refresh: hide UI until auth is ready --- */
+html.preload body {
+  opacity: 0;
+}
+
+html.preload body, body {
+  transition: opacity 150ms ease;
+}
+
+/* Top progress bar (refresh/loading) */
+.top-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 0%;
+  background: rgba(255,255,255,0.9);
+  box-shadow: 0 0 10px rgba(255,255,255,0.35);
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+}
+
+html.preload .top-progress {
+  opacity: 1;
+  animation: topProgressMove 900ms ease-in-out infinite;
+}
+
+@keyframes topProgressMove {
+  0% { width: 0%; transform: translateX(0); }
+  50% { width: 65%; }
+  100% { width: 100%; }
+}
+
+:root{
+  --bg:#f4f5f7;
+  --card-bg:#ffffff;
+  --primary:#8b1f23;
+  --primary-dark:#5e1417;
+  --sidebar-bg:#101320;
+  --text-muted:#6b7280;
+  --border:#d1d5db;
+}
+*{box-sizing:border-box;}
+/* Sağ panel yüksekliği değişince dikey scrollbar belirip kaybolarak tüm sayfayı
+   yatayda kaydırıyordu (checkbox tıklarken görülen "titreme"). Scrollbar için
+   her zaman yer ayırarak genişliğin sabit kalmasını sağlıyoruz. */
+html{scrollbar-gutter:stable;overflow-y:scroll;}
+/* Sağ detay paneli (checkbox ile seçilen kayda göre) her tıklamada farklı
+   yükseklikte yeniden çiziliyor. Sayfa scroll'u tarayıcının otomatik
+   "scroll anchoring" düzeltmesini tetikliyor: içerik değişince tarayıcı önce
+   telafi amaçlı kaydırıyor, sonra layout oturunca geri dönüyor — tıklayınca
+   sayfanın yukarı zıplayıp normale dönmesinin sebebi bu. Bilerek kapatıyoruz. */
+html, body{overflow-anchor:none;}
+#detayPanel{overflow-anchor:none;}
+
+/* Sağ detay paneli, seçilen kayda göre (notlar/ek sayısı farklı olduğundan)
+   her checkbox tıklamasında farklı yükseklikte yeniden çiziliyordu. Panelin
+   büyümesi/küçülmesi sayfanın toplam yüksekliğini değiştirip görünür bir
+   "zıplamaya" sebep oluyordu. adjustTableScrollHeights() (ui.js) sayfaya
+   girildiğinde bu kutuya SABİT bir pixel yükseklik veriyor (tablo kutusuyla
+   aynı yöntem) — hangi kayıt önizlenirse önizlensin yükseklik hiç değişmiyor,
+   taşan içerik panelin kendi içinde kayıyor. Aşağıdaki max-height, JS henüz
+   çalışmadan önceki an için sadece bir yedek/fallback.*/
+.detail-autoheight{
+  max-height:calc(100vh - 160px);
+  overflow-y:auto;
+  overflow-anchor:none;
+}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:#111827;position:relative;}
+/* Prevent page-level horizontal scrolling (use per-table scroll areas instead) */
+body{overflow-x:hidden;}
+
+/* === Kurumsal arkaplan overlay (tüm sayfalar) === */
+body::before{
+  content:"";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  /* Kurumsal renge uygun, göz yormayan katman */
+  background:
+    radial-gradient(1100px 600px at 12% 12%, rgba(139,31,35,0.14), transparent 60%),
+    radial-gradient(900px 500px at 88% 18%, rgba(16,19,32,0.10), transparent 55%),
+    linear-gradient(180deg, rgba(255,255,255,0.00) 0%, rgba(139,31,35,0.05) 100%);
+}
+
+/* içerik overlay'in üstünde kalsın */
+.app, .topbar, .sidebar, .content, .page{position:relative;z-index:1;}
+.hidden{display:none;}
+/* Login */
+.login-wrapper{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at top,#fecaca,transparent 60%),var(--bg);
+}
+.login-card{
+  width:100%;max-width:420px;background:#fff;border-radius:14px;
+  box-shadow:0 10px 35px rgba(15,23,42,0.18);
+  padding:24px 26px;
+}
+.login-header{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+.login-logo{
+  width:80px;height:80px;border-radius:16px;
+  background:#ffffff;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 6px 18px rgba(15,23,42,0.25);
+}
+.login-title{font-size:20px;font-weight:600;margin:0;}
+.login-sub{font-size:12px;color:var(--text-muted);margin:4px 0 0;}
+.login-card label{font-size:13px;}
+.login-card input, .login-card select{
+  width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);
+  margin-top:4px;margin-bottom:10px;font-size:14px;
+}
+.login-card input:focus, .login-card select:focus{
+  outline:none;border-color:var(--primary);box-shadow:0 0 0 1px rgba(180,0,0,0.25);
+}
+button{
+  background:var(--primary);color:#fff;padding:9px 18px;border:0;border-radius:6px;
+  cursor:pointer;font-size:14px;transition:background .15s ease,transform .05s ease;
+}
+button:hover{background:var(--primary-dark);}
+button:active{transform:scale(0.98);}
+button.secondary{background:#6b7280;}
+button.secondary:hover{background:#4b5563;}
+.login-help{font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;}
+.login-help code{
+  background:#f3f4f6;border-radius:4px;padding:1px 4px;font-size:11px;
+}
+
+/* App layout */
+.sidebar{
+  width:230px;background:var(--sidebar-bg);color:#fff;
+  position:fixed;top:0;bottom:0;left:0;
+  padding:20px 18px;display:flex;flex-direction:column;gap:20px;
+}
+.sidebar-header{display:flex;align-items:center;gap:8px;}
+.sidebar-logo{
+  width:40px;height:40px;border-radius:10px;
+  background:#ffffff;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 12px rgba(0,0,0,0.35);
+}
+.sidebar h2{font-size:18px;margin:0;}
+.sidebar-version{font-size:11px;color:#9ca3af;}
+.nav{margin-top:10px;flex:1;}
+.nav-item{
+  margin:4px 0;padding:8px 10px;border-radius:8px;
+  cursor:pointer;font-size:14px;display:flex;align-items:center;gap:8px;
+}
+.nav-item span.icon{font-size:14px;}
+.nav-item:hover,.nav-item.active{background:#111827;}
+.nav-footer{font-size:11px;color:#9ca3af;margin-top:auto;}
+
+.content{margin-left:0;width:100%;overflow-x:hidden;}
+
+/* Scroll container for wide tables (prevents the page from sliding under the fixed sidebar) */
+.table-scroll{
+  max-width:100%;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
+  background:#fff;
+  /* Bu kutu kendi başına bir dikey-scroll konteyneri. Seç modunda bir
+     checkbox işaretlenince tarayıcının otomatik "scroll anchoring" telafisi
+     tetikleniyor ve içeriği anlık kaydırıp geri getiriyordu ("pop-up gibi
+     yukarı kalkıp normale dönme"). Bu otomatik telafiyi kapatıyoruz. */
+  overflow-anchor:none;
+}
+.table-scroll *{ overflow-anchor:none; }
+
+/* Make long free-text fields readable */
+.ack-box{
+  margin-top:6px;
+  padding:10px 12px;
+  background:#f9fafb;
+  border:1px solid #e5e7eb;
+  border-radius:10px;
+  font-size:14px;
+  line-height:1.45;
+  white-space:pre-wrap;
+  word-break:break-word;
+  color:#111827;
+}
+.topbar{
+  background:var(--primary);color:#fff;padding:10px 20px;
+  display:flex;justify-content:space-between;align-items:center;
+  font-size:13px;
+}
+.topbar-right{font-weight:600;}
+.notify-bell{
+  position:relative;
+  cursor:pointer;
+  font-size:18px;
+}
+.notify-badge{
+  position:absolute;
+  top:-6px;
+  right:-10px;
+  background:#f97316;
+  color:#fff;
+  border-radius:999px;
+  padding:1px 5px;
+  font-size:10px;
+}
+
+.global-search {
+  display: inline-flex;
+  align-items: center;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.10);
+  padding: 0px 4px !important;
+  border-radius: 6px !important;
+  gap: 3px;
+  height: 16px !important;
+}
+.global-search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 10px !important;
+  width: 95px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  height: 14px !important;
+}
+.global-search-icon,
+.global-refresh-icon {
+  font-size: 14px !important;
+  margin-left: 6px;
+  cursor: pointer;
+}
+.notify-dropdown{
+  /*
+    NOTE:
+    Notification dropdown should behave like an overlay. Using `absolute` inside
+    the topbar creates a stacking context limitation (topbar has z-index: 1),
+    so other panels/modals can appear above it and make it look "broken".
+    We render it as a `fixed` layer and compute its position via JS.
+  */
+  position:fixed;
+  left:auto;
+  right:auto;
+  top:auto;
+  background:#ffffff;
+  color:#111827;
+  border-radius:8px;
+  box-shadow:0 10px 30px rgba(15,23,42,0.25);
+  width:320px;
+  max-height:360px;
+  overflow:auto;
+  font-size:12px;
+  z-index:10000;
+  padding:8px;
+}
+.notify-item{
+  padding:6px 4px;
+  border-bottom:1px solid #e5e7eb;
+  cursor:pointer;
+}
+.notify-item:hover{
+  background:#f3f4f6;
+}
+.notify-item-unread{
+  background:#eff6ff;
+}
+.notify-item-unread:hover{
+  background:#dbeafe;
+}
+
+.notify-empty{
+  font-size:12px;
+  color:var(--text-muted);
+  padding:6px 2px;
+}
+
+/* Notification source badges */
+.nb-badge{
+  padding:2px 6px;
+  border-radius:999px;
+  font-size:10px;
+  color:#ffffff;
+  margin-right:6px;
+  display:inline-block;
+}
+.nb-badge.stok{ background:#2563eb; }      /* mavi - Stok */
+.nb-badge.merkez{ background:#dc2626; }    /* kırmızı - Merkez */
+.nb-badge.mk{ background:#16a34a; }        /* yeşil - Mal Kabul */
+.nb-badge.kayseri{ background:#7c3aed; }   /* mor - Kayseri Depo */
+.nb-badge.sys{ background:#f97316; }       /* turuncu - Diğer/Sistem */
+
+
+
+.main{padding:20px;}
+h1{font-size:22px;margin:0 0 6px;}
+.page-subtitle{font-size:13px;color:var(--text-muted);margin-bottom:14px;}
+.card{
+  background:var(--card-bg);padding:20px;border-radius:10px;margin-bottom:20px;
+  box-shadow:0 1px 4px rgba(15,23,42,0.06);
+}
+input,select,textarea{
+  width:100%;padding:8px 10px;border:1px solid var(--border);
+  border-radius:6px;margin-top:4px;margin-bottom:12px;
+  font-size:14px;
+}
+input:focus,select:focus,textarea:focus{
+  outline:none;border-color:var(--primary);box-shadow:0 0 0 1px rgba(180,0,0,0.25);
+}
+textarea{min-height:80px;resize:vertical;}
+
+.flex{display:flex;gap:18px;}
+.flex-2{flex:2;min-width:0;}
+.flex-1{flex:1;min-width:0;}
+
+
+.flex-3{flex:3;min-width:0;}
+/* Make the right-side detail panel narrower on "Bildirim Talepleri" */
+#gelenDetayWrapper{
+  flex:1;
+  min-width:0;
+  width:auto;
+  max-width:420px;
+}
+
+#gelenDetayPanel.card{
+  padding:10px;
+}
+
+@media (max-width: 1300px){
+  /* keep ratio but allow wrapping if needed */
+}
+
+
+/* Table */
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th,td{padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:left;white-space:nowrap;}
+th{
+  background:#f9fafb;font-weight:600;position:sticky;top:0;z-index:1;
+}
+tr:hover{background:#f3f4f6;cursor:pointer;}
+
+/* Keep wide tables from scrolling the whole page */
+.table-scroll{
+  width:100%;
+  max-width:100%;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+/* Readable long text blocks (e.g., Şube Açıklaması) */
+.ack-box{
+  margin-top:6px;
+  padding:10px 12px;
+  background:#f9fafb;
+  border:1px solid #e5e7eb;
+  border-radius:10px;
+  font-size:14px;
+  line-height:1.45;
+  white-space:pre-wrap;
+  word-break:break-word;
+  color:#111827;
+}
+
+/* Badges */
+.badge{
+  display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;
+}
+.badge-open{background:#fee2e2;color:#991b1b;}
+.badge-closed{background:#e5e7eb;color:#374151;}
+.badge-review{background:#dbeafe;color:#1d4ed8;}
+.badge-wait{background:#fef9c3;color:#854d0e;}
+.badge-ok{background:#dcfce7;color:#166534;}
+.badge-nok{background:#fee2e2;color:#991b1b;}
+.badge-np-plus{background:#dcfce7;color:#166534;font-weight:700;min-width:22px;text-align:center;}
+.badge-np-minus{background:#fee2e2;color:#991b1b;font-weight:700;min-width:22px;text-align:center;}
+.np-sign{display:inline-block;font-weight:800;font-size:16px;line-height:1;min-width:12px;text-align:center;}
+.np-sign-plus{color:#15803d;}
+.np-sign-minus{color:#dc2626;}
+
+.small-text{font-size:12px;color:var(--text-muted);}
+
+/* Upload progress */
+.upload-progress{margin-top:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:10px;overflow:hidden}
+.upload-progress.hidden{display:none}
+.upload-progress-bar{height:10px;width:0%}
+.upload-progress-bar{background:var(--primary)}
+.upload-progress-text{padding:6px 10px;font-size:12px;color:var(--text-muted)}
+
+/* KPI cards */
+.kpi-row{display:flex;gap:18px;margin-bottom:18px;flex-wrap:wrap;}
+.kpi-card{
+  position:relative;
+  flex:1;
+  min-width:180px;
+  background:var(--card-bg);
+  border-radius:12px;
+  padding:16px 18px;
+  border:1px solid rgba(15,23,42,0.08);
+  box-shadow:0 1px 4px rgba(15,23,42,0.06);
+  transition:
+    transform .16s ease,
+    box-shadow .16s ease,
+    border-color .16s ease,
+    background .16s ease;
+  will-change:transform;
+}
+.kpi-card::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:12px;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity .16s ease;
+  /* Soft highlight for a nicer "lift" feeling */
+  background:linear-gradient(135deg, rgba(139,31,35,0.10), rgba(139,31,35,0.0) 60%);
+}
+.kpi-card:hover{
+  transform:translateY(-4px);
+  border-color:rgba(139,31,35,0.28);
+  box-shadow:0 10px 22px rgba(15,23,42,0.10);
+}
+.kpi-card:hover::after{opacity:1;}
+.kpi-card:focus-within{
+  transform:translateY(-3px);
+  border-color:rgba(139,31,35,0.34);
+  box-shadow:0 12px 24px rgba(15,23,42,0.12);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .kpi-card, .kpi-card::after{transition:none !important;}
+  .kpi-card:hover, .kpi-card:focus-within{transform:none !important;}
+}
+.kpi-label{font-size:12px;color:var(--text-muted);margin-bottom:4px;}
+.kpi-value{font-size:20px;font-weight:600;}
+.kpi-desc{font-size:11px;color:var(--text-muted);margin-top:4px;}
+
+/* Charts */
+.chart-row{display:flex;gap:18px;flex-wrap:wrap;}
+.chart-card{flex:1;min-width:260px;}
+.chart-card canvas{width:100%;max-height:260px;}
+
+/* Pivot table */
+.pivot-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;}
+.pivot-table th,.pivot-table td{
+  padding:6px 8px;border:1px solid #d1d5db;text-align:right;
+}
+.pivot-table th:first-child,
+.pivot-table td:first-child{
+  text-align:left;
+}
+.pivot-header-main{
+  background:#111827;color:#f9fafb;font-weight:600;
+}
+.pivot-header-sub{
+  background:#e5e7eb;font-weight:600;
+}
+.pivot-row-branch{
+  background:#e5f0ff;
+}
+.pivot-row-total{
+  background:#111827;color:#f9faff;font-weight:600;
+}
+
+/* Notlar rol renkleri */
+.note-item{margin-bottom:6px;padding:4px 6px;border-radius:6px;background:#f9fafb;}
+.note-meta{font-size:11px;margin-bottom:2px;}
+.note-text{font-size:12px;}
+
+
+.ekdosya-item{
+  margin-top:4px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+}
+.ekdosya-item .secondary{
+  padding: 1px 6px !important;
+  font-size: 10px !important;
+  border-radius: 4px !important;
+  height: 20px !important;
+  line-height: 12px !important;
+}
+.ekdosya-delete {
+  padding: 1px 6px !important;
+  font-size: 10px !important;
+  border-radius: 4px !important;
+  height: 20px !important;
+  line-height: 12px !important;
+}
+.note-rol-sube .note-meta{color:#1d4ed8;}      /* mavi */
+.note-rol-merkez .note-meta{color:#b91c1c;}    /* kırmızı */
+.note-rol-stok .note-meta{color:#92400e;}      /* turuncu/kahve */
+.note-rol-kayseri .note-meta{color:#7e22ce;}   /* mor */
+.note-rol-diger .note-meta{color:#374151;}
+
+body.role-kayseri .col-merkez-ack{display:none;}
+.col-kayseri-ack{
+  text-align:left;
+}
+
+
+/* Kayseri Depo Açıklama hizalama düzeltme */
+td.col-kayseri-ack{
+    text-align:left !important;
+    white-space:normal !important;
+}
+
+
+
+.col-malkabul-ack{display:none;}
+body.role-stok .col-malkabul-ack,
+body.role-malkabul .col-malkabul-ack,
+body.role-sube .col-malkabul-ack{display:table-cell;}
+
+/* Kayseri Depo Açıklama sütun hizası (bildirim listesi son sütun) */
+#tblBildirimler td:last-child{
+  text-align:left !important;
+  white-space:normal !important;
+}
+
+
+/* === FINAL FIX: Kayseri Depo Açıklama doğru hizalama === */
+td.col-kayseri-ack{
+    text-align:left !important;
+    white-space:normal !important;
+}
+
+#tblBildirimler td.col-kayseri-ack{
+    text-align:left !important;
+    white-space:normal !important;
+    max-width:260px !important;
+}
+
+
+/* === GELEN & YAPILAN FİLTRE SATIRLARI DÜZEN === */
+.filter-row{
+  margin-bottom:10px;
+  display:grid;
+  /* Sabit sütun sayısı — bkz. aşağıdaki !important'lı tanımdaki not */
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:12px;
+  align-items:end;
+}
+.filter-row > div{
+  min-width:0; /* taşmaları engelle */
+}
+.filter-row label{
+  font-size:12px;
+  white-space:nowrap;
+}
+.filter-row select{
+  width:100%;
+  font-size:13px;
+  padding:4px 8px;
+}
+
+/* Filter clear buttons + tools */
+.select-with-clear{ position:relative; display:block; }
+.select-with-clear select{ width:100%; min-width:0; padding-right:52px; }
+.filter-clear{
+  position:absolute;
+  right:34px; /* native ok işaretine çarpmaması için */
+  top:50%;
+  transform:translateY(-50%);
+  /* global button style override (avoid looking like a separate button) */
+  border:0 !important;
+  background:transparent !important;
+  color:#6b7280;
+  width:18px;
+  height:18px;
+  padding:0 !important;
+  font-size:14px;
+  line-height:1;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  opacity:.55;
+  border-radius:9999px;
+  transition:opacity .15s ease, background .15s ease;
+}
+.filter-clear:hover{ background:#f3f4f6 !important; opacity:1; }
+.filter-clear:active{ transform:translateY(-50%); }
+
+.filter-tools{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:8px 0 12px 0;
+}
+/* Sol grup: kayıt sayısı + "Seç" butonu birlikte */
+.filter-tools-left{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.filter-count{
+  font-size:13px;
+  font-weight:600;
+  color:#374151;
+  white-space:nowrap;
+}
+
+/* "Seç" butonu — şık, kurumsal görünüm (marka kırmızısı ile uyumlu) */
+.bulk-select-toggle-btn{
+  display:none;
+  align-items:center;
+  gap:6px;
+  height:32px;
+  padding:0 14px;
+  font-size:13px;
+  font-weight:600;
+  color:#1d4ed8;
+  background:#fff;
+  border:1px solid #1d4ed8;
+  border-radius:8px;
+  cursor:pointer;
+  transition:background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+body.role-merkez-bulk .bulk-select-toggle-btn{ display:inline-flex; }
+.bulk-select-toggle-btn::before{
+  content:"☑";
+  font-size:14px;
+  line-height:1;
+}
+.bulk-select-toggle-btn:hover{
+  background:#eff6ff;
+}
+/* Toplu seçim modu aktifken buton dolu maviye döner (aktif olduğu belli) */
+body.bulk-select-mode .bulk-select-toggle-btn{
+  background:#1d4ed8;
+  color:#fff;
+  box-shadow:0 2px 8px rgba(29,78,216,0.25);
+}
+body.bulk-select-mode .bulk-select-toggle-btn::before{ content:"✕"; }
+body.bulk-select-mode .bulk-select-toggle-btn:hover{
+  background:#1e40af;
+}
+
+/* Gelen/Yapılan Bildirimler sayfalarındaki "Toplu seçim" butonu (her zaman
+   görünür — kendi sayfasında). Toplu seçim butonuyla aynı görünüm. */
+.bulk-page-toggle-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  height:32px;
+  padding:0 14px;
+  font-size:13px;
+  font-weight:600;
+  color:#1d4ed8;
+  background:#fff;
+  border:1px solid #1d4ed8;
+  border-radius:8px;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.bulk-page-toggle-btn::before{ content:"☑"; font-size:14px; line-height:1; }
+.bulk-page-toggle-btn:hover{ background:#eff6ff; }
+body.bulk-select-mode .bulk-page-toggle-btn{
+  background:#1d4ed8; color:#fff; box-shadow:0 2px 8px rgba(29,78,216,0.25);
+}
+body.bulk-select-mode .bulk-page-toggle-btn::before{ content:"✕"; }
+body.bulk-select-mode .bulk-page-toggle-btn:hover{ background:#1e40af; }
+
+/* Stok rolüne özel "Açıklama eklenenler" filtre butonu */
+.stok-ack-filter-btn{
+  display:none;
+  align-items:center;
+  gap:6px;
+  height:32px;
+  padding:0 14px;
+  font-size:13px;
+  font-weight:600;
+  color:#1d4ed8;
+  background:#fff;
+  border:1px solid #1d4ed8;
+  border-radius:8px;
+  cursor:pointer;
+  transition:background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+body.role-stok .stok-ack-filter-btn{ display:inline-flex; }
+.stok-ack-filter-btn::before{
+  content:"✎";
+  font-size:14px;
+  line-height:1;
+}
+.stok-ack-filter-btn:hover{
+  background:#eff6ff;
+}
+/* Aktifken (filtre uygulanmışken) dolu mavi */
+.stok-ack-filter-btn.active{
+  background:#1d4ed8;
+  color:#fff;
+  box-shadow:0 2px 8px rgba(29,78,216,0.25);
+}
+
+/* Table UX */
+.table-scroll thead th{
+  position:sticky;
+  top:0;
+  z-index:2;
+  background:#ffffff;
+}
+tr.row-selected td{
+  background:#eef2ff !important;
+}
+.cell-ellipsis{
+  display:block;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+/* Seçili satırda "İlgili Şube Açıklama" tam görünsün (Gelen/Yapılan tablolar).
+   #tblBildirimler bilerek hariç tutuluyor: o tabloda checkbox ile toplu seçim
+   yapılırken her tıklamada seçili satır değişiyor, satır yüksekliği bu kuralla
+   büyüyüp küçülünce sayfa yukarı zıplayıp geri dönüyordu ("titreme"). */
+#tblGelenBildirimler tr.row-selected td:last-child .cell-ellipsis,
+#tblGelenBildirimler tr.row-selected td:nth-child(11) .cell-ellipsis,
+#tblGelenBildirimler tr.row-selected td:nth-child(12) .cell-ellipsis,
+#tblMalkabulYapilan tr.row-selected td:last-child .cell-ellipsis,
+#tblMalkabulYapilan tr.row-selected td:nth-child(11) .cell-ellipsis,
+#tblMalkabulYapilan tr.row-selected td:nth-child(12) .cell-ellipsis,
+#tblKayseriYapilan tr.row-selected td:last-child .cell-ellipsis,
+#tblKayseriYapilan tr.row-selected td:nth-child(11) .cell-ellipsis,
+#tblKayseriYapilan tr.row-selected td:nth-child(12) .cell-ellipsis{
+  white-space:normal !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  word-break:break-word;
+  max-width:none;
+}
+#tblGelenBildirimler tr.row-selected td:last-child,
+#tblGelenBildirimler tr.row-selected td:nth-child(11),
+#tblGelenBildirimler tr.row-selected td:nth-child(12),
+#tblMalkabulYapilan tr.row-selected td:last-child,
+#tblMalkabulYapilan tr.row-selected td:nth-child(11),
+#tblMalkabulYapilan tr.row-selected td:nth-child(12),
+#tblKayseriYapilan tr.row-selected td:last-child,
+#tblKayseriYapilan tr.row-selected td:nth-child(11),
+#tblKayseriYapilan tr.row-selected td:nth-child(12){
+  white-space:normal;
+  vertical-align:top;
+}
+
+#tblGelenBildirimler tr.row-selected .ellipsis,
+#tblMalkabulYapilan tr.row-selected .ellipsis,
+#tblKayseriYapilan tr.row-selected .ellipsis{ white-space:normal; overflow:visible; text-overflow:clip; }
+
+/* #tblBildirimler: satıra tıklanınca (row-selected) İlgili Şube Açıklama ve
+   Stok Kontrol Açıklama hücreleri tam metni gösterecek şekilde uzar — AMA
+   yalnızca toplu seçim modu KAPALIYKEN. Toplu seçim açıkken satır yüksekliği
+   sabit kalır (checkbox tıklamalarında zıplama olmaması için). checkbox
+   kolonu 1. sütun olduğundan açıklama sütunları 12. ve 13(last)-child. */
+body:not(.bulk-select-mode) #tblBildirimler tr.row-selected td:last-child .cell-ellipsis,
+body:not(.bulk-select-mode) #tblBildirimler tr.row-selected td:nth-child(12) .cell-ellipsis,
+body:not(.bulk-select-mode) #tblBildirimler tr.row-selected td:nth-child(13) .cell-ellipsis{
+  white-space:normal !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  word-break:break-word;
+  max-width:none;
+}
+body:not(.bulk-select-mode) #tblBildirimler tr.row-selected td{
+  height:auto !important;
+  vertical-align:top;
+}
+
+
+/* Accordion (detail panel) */
+.accordion{ border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; }
+.accordion-header{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  background:#f9fafb;
+  border:none;
+  padding:10px 12px;
+  cursor:pointer;
+  font-weight:700;
+}
+.accordion-body{ padding:10px 12px; }
+.accordion-body.hidden{ display:none; }
+
+/* ================================
+   Depo Takip - modern kart tasarımı
+================================ */
+.depo-header{
+  margin: 0 0 14px 0;
+}
+.depo-title{
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -0.4px;
+}
+.depo-subtitle{
+  margin-top: 6px;
+  color: var(--text-muted);
+}
+
+.depo-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.depo-card{
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(209,213,219,0.85);
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(16,24,40,0.08);
+  overflow: hidden;
+  backdrop-filter: blur(6px);
+}
+
+.depo-card-head{
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(139,31,35,0.08) 0%, rgba(255,255,255,0.00) 100%);
+  border-bottom: 1px solid rgba(238,241,246,0.9);
+}
+
+.depo-card-title{
+  font-weight: 800;
+  font-size: 14px;
+  color: #111827;
+}
+.depo-card-desc{
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.depo-table-wrap{
+  max-height: 360px;
+  overflow: auto;
+}
+
+/* Bu sayfadaki tbl'leri daha kurumsal göster */
+.depo-tbl{
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+.depo-tbl thead th{
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f6f7fb;
+  color: #111827;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e6eaf0;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.depo-tbl tbody td{
+  padding: 10px 12px;
+  border-bottom: 1px solid #eef1f6;
+}
+.depo-tbl tbody tr:nth-child(even){
+  background: #fbfcfe;
+}
+.depo-tbl tbody tr:hover{
+  background: #f1f7ff;
+}
+.depo-tbl .text-end{
+  text-align: right;
+  white-space: nowrap;
+}
+
+.depo-note{
+  padding: 12px 16px 16px 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.depo-note-label{
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+@media (max-width: 1100px){
+  .depo-grid{ grid-template-columns: 1fr; }
+  .depo-table-wrap{ max-height: 320px; }
+}
+
+
+/* Forgot password link (AuthGate) */
+#authGate .forgot-link{
+  margin-top:14px;
+  border:none;
+  background:transparent;
+  color:var(--primary,#8b0000);
+  cursor:pointer;
+  font-weight:700;
+  text-align:center;
+  padding:8px 0 0 0;
+}
+#authGate .forgot-link:hover{ text-decoration:underline; }
+#authGate .forgot-msg{
+  margin-top:6px;
+  font-size:12px;
+  color:#444;
+  text-align:center;
+}
+
+body.__authed #loginPage,
+  body.__authed #loginPanel,
+  body.__authed .loginPage,
+  body.__authed .login-panel,
+  body.__authed .login-footer,
+  body.__authed .loginBar,
+  body.__authed .bottomLoginBar { display:none !important; }
+
+/* Hide any wide bottom bar that just says "Giriş Yap" */
+  body.__authed button, body.__authed div, body.__authed footer, body.__authed section{
+    /* no-op: we will target via attribute selectors below */
+  }
+  body.__authed [data-loginbar],
+  body.__authed #loginFooter,
+  body.__authed #loginBar,
+  body.__authed .login-footer,
+  body.__authed .login-bar { display:none !important; }
+
+  /* Specific: if there is a full-width bar with text "Giriş Yap", it's usually in a fixed bottom container */
+  body.__authed .__bottomLoginStrip { display:none !important; }
+
+body.__authed #loginEmail,
+  body.__authed #loginPass,
+  body.__authed #loginBtn,
+  body.__authed #loginPanel,
+  body.__authed #loginPage { display:none !important; }
+
+.toast-wrap{position:fixed;right:18px;bottom:18px;z-index:999999;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+
+/* ===== File Viewer Overlay ===== */
+.fv-overlay{position:fixed;inset:0;z-index:1000000}
+.fv-overlay.hidden{display:none}
+.fv-backdrop{position:absolute;inset:0;background:rgba(0,0,0,0.65)}
+.fv-modal{position:relative;z-index:1000001;max-width:1100px;width:calc(100% - 32px);margin:24px auto;background:#fff;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,0.35);overflow:hidden}
+.fv-close{position:absolute;top:8px;right:10px;border:0;background:transparent;font-size:28px;line-height:28px;cursor:pointer;color:#222;padding:4px 8px}
+.fv-head{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:14px 56px 10px 14px;border-bottom:1px solid rgba(0,0,0,0.08)}
+.fv-title{font-weight:700;max-width:70vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fv-body{padding:12px;max-height:calc(100vh - 120px);overflow:auto}
+.fv-body img{max-width:100%;height:auto;display:block;margin:0 auto}
+.fv-iframe{width:100%;height:calc(100vh - 160px);border:0}
+  .toast{min-width:240px;max-width:420px;background:#111827;color:#fff;border-radius:12px;box-shadow:0 10px 24px rgba(0,0,0,.18);padding:12px 14px;font-size:13px;line-height:1.35;display:flex;gap:10px;align-items:flex-start;opacity:0;transform:translateY(8px);transition:opacity .18s ease, transform .18s ease}
+  .toast.show{opacity:1;transform:translateY(0)}
+  .toast .dot{width:10px;height:10px;border-radius:99px;margin-top:3px;flex:0 0 auto}
+  .toast.success .dot{background:#22c55e}
+  .toast.error .dot{background:#ef4444}
+  .toast.info .dot{background:#3b82f6}
+  .toast .title{font-weight:700;margin-bottom:2px}
+  .toast .msg{opacity:.92}
+
+/* Prevent 1-frame flash of the legacy login before Firebase auth state resolves */
+  body:not(.auth-ready) #loginPage { display: none !important; }
+
+#authGate{position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;background:url("./assets/bg.webp") center/cover no-repeat fixed;}
+
+#authGate::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    linear-gradient(120deg, rgba(10,16,30,0.78), rgba(10,16,30,0.55)),
+    radial-gradient(900px 600px at 20% 20%, rgba(255,255,255,0.10), transparent 60%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+#authGate > *{position:relative;z-index:1;}
+
+
+  /* Smaller, more modern login card */
+  /* Slightly smaller + more modern */
+  #authGate .card{width:min(340px,calc(100% - 32px));
+    background:rgba(255,255,255,.92);
+    border:1px solid rgba(255,255,255,.18);
+    border-radius:20px;
+    box-shadow:0 18px 60px rgba(0,0,0,.38);
+    padding:16px 16px 14px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  #authGate h3{margin:0 0 4px;font-size:17px;text-align:center}
+  #authGate .muted{opacity:.75;font-size:12px;margin:0 0 10px;text-align:center}
+  #authGate label{display:block;font-size:12px;opacity:.78;margin:10px 0 6px}
+  #authGate input{width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,.12);border-radius:12px;outline:none}
+  #authGate button{width:100%;padding:11px;border:0;border-radius:12px;cursor:pointer;font-weight:700}
+  #authGate .err{color:#b00020;margin-top:10px;font-size:13px;min-height:18px}
+  #authGate .row{display:grid;gap:10px}
+  #authGate .top{display:flex;align-items:center;justify-content:center;gap:10px;position:relative}
+  #authGate .top > div{width:100%}
+  #authGate #authLogoutBtn{position:absolute;right:12px;top:10px;width:auto;padding:8px 10px;border-radius:10px}
+  #authGate .ghost{background:transparent;border:1px solid #ddd;font-weight:600}
+/* === AUTH MODE: hide app behind auth gate === */
+body.auth-mode #appRoot,
+body.auth-mode #loginPage{
+  display:none !important;
+}
+body.auth-mode{
+  overflow:hidden;
+}
+
+
+
+/* === Glass Login (reference-style) === */
+#authGate .login-glass{
+  width:min(360px, calc(100% - 36px));
+  padding:26px 26px 22px;
+  border-radius:16px;
+
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+
+  border:1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 22px 70px rgba(0,0,0,0.50);
+  color:#fff;
+}
+
+#authGate .login-title{
+  margin:0 0 18px 0;
+  text-align:center;
+  font-size:18px;
+  font-weight:600;
+  letter-spacing:.2px;
+}
+
+#authGate .ig{
+  position:relative;
+  margin:0 0 12px 0;
+}
+#authGate .ig input{
+  width:100%;
+  padding:12px 12px 12px 44px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.28);
+  color:#fff;
+  outline:none;
+}
+#authGate .ig input::placeholder{
+  color: rgba(255,255,255,0.65);
+}
+#authGate .ig input:focus{
+  border-color: rgba(255,255,255,0.45);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.10);
+}
+#authGate .ig-icon{
+  position:absolute;
+  left:12px;
+  top:50%;
+  transform:translateY(-50%);
+  opacity:.85;
+  color: rgba(255,255,255,0.85);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+
+#authGate .opts{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin:10px 0 16px;
+  font-size:12.5px;
+}
+
+#authGate .chk{
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  cursor:pointer;
+  user-select:none;
+  opacity:.9;
+}
+#authGate .chk input{
+  width:14px;
+  height:14px;
+  accent-color:#111;
+}
+
+#authGate .link{
+  border:none;
+  background:transparent;
+  color: rgba(255,255,255,0.85);
+  cursor:pointer;
+  padding:0;
+  text-decoration:none;
+}
+#authGate .link:hover{
+  text-decoration:underline;
+}
+
+#authGate .btn-dark{
+  width:100%;
+  padding:12px;
+  border-radius:10px;
+  border:none;
+  background: rgba(0,0,0,0.75);
+  color:#fff;
+  font-weight:600;
+  cursor:pointer;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+}
+#authGate .btn-dark:hover{
+  background: rgba(0,0,0,0.90);
+}
+/* Giriş butonu yükleme animasyonu (spinner + "Giriş yapılıyor...") */
+#authGate .btn-dark.btn-loading{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  cursor:progress;
+  opacity:0.95;
+}
+.btn-spinner{
+  width:16px;height:16px;
+  border:2px solid rgba(255,255,255,0.35);
+  border-top-color:#fff;
+  border-radius:50%;
+  display:inline-block;
+  animation:btnSpin 0.6s linear infinite;
+  flex:0 0 auto;
+}
+@keyframes btnSpin{ to{ transform:rotate(360deg); } }
+/* Başarılı girişte kutu yumuşakça soldurup yukarı süzülür */
+#authGate.auth-success .login-glass{
+  animation:authLoginSuccess 0.5s ease forwards;
+}
+@keyframes authLoginSuccess{
+  to{ opacity:0; transform:translateY(-18px) scale(0.98); }
+}
+
+#authGate .forgot-msg,
+#authGate .err{
+  margin-top:10px;
+  font-size:12.5px;
+  text-align:center;
+}
+#authGate .forgot-msg{ color: rgba(255,255,255,0.85); }
+#authGate .err{ color: #ffb4b4; }
+
+/* Ensure old card styles don't affect the new one */
+#authGate .card{ display:none !important; }
+
+
+/* Auth gate açıkken uygulama/çıkış butonları görünmesin (flash fix) */
+body.auth-mode #logoutBtn,
+body.auth-mode #authLogoutBtn,
+body.auth-mode .logout-btn,
+body.auth-mode [data-logout] {
+  display: none !important;
+}
+
+.btn-mini{padding:4px 8px;font-size:12px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#111827;cursor:pointer;margin-right:6px;}
+.btn-mini:hover{background:#f3f4f6;}
+
+
+
+/* Müdür sayfaları yardımcı sınıflar */
+.table-wrap{overflow:auto;border:1px solid #e5e7eb;border-radius:10px;background:#fff;}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media (max-width: 1100px){.grid-2{grid-template-columns:1fr;}}
+.card-title{margin:0 0 10px 0;font-size:14px;font-weight:700;}
+
+
+
+/* === Müdür Dashboard Ek Bloklar === */
+.mudur-hint{
+  margin: 10px 0 18px;
+  color:#555;
+  font-size: 13px;
+}
+.dash-grid-2{
+  display:grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap:14px;
+  margin-bottom:14px;
+}
+@media (max-width: 1100px){
+  .dash-grid-2{ grid-template-columns: 1fr; }
+}
+.dash-card{
+  background:#fff;
+  border:1px solid rgba(0,0,0,.06);
+  border-radius:12px;
+  padding:14px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.03);
+  margin-bottom:14px;
+}
+.dash-card-title{
+  font-weight:700;
+  margin-bottom:4px;
+}
+.dash-card-sub{
+  color:#666;
+  font-size:12px;
+  margin-bottom:10px;
+}
+.table-wrap.small{
+  max-height: 240px;
+  overflow:auto;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius:10px;
+}
+.mini-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:12px;
+}
+.mini-table thead th{
+  position: sticky;
+  top:0;
+  background:#f7f7f7;
+  text-align:left;
+  padding:8px 10px;
+  border-bottom:1px solid rgba(0,0,0,.06);
+  white-space:nowrap;
+}
+.mini-table tbody td{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(0,0,0,.05);
+  vertical-align:top;
+}
+.mini-title{
+  font-weight:700;
+  margin: 6px 0 8px;
+}
+.dash-card-actions{
+  margin-top:10px;
+  display:flex;
+  gap:8px;
+  justify-content:flex-end;
+}
+.today-grid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap:10px;
+}
+.today-item{
+  border:1px solid rgba(0,0,0,.06);
+  border-radius:10px;
+  padding:10px;
+  background:#fafafa;
+}
+.today-label{
+  font-size:12px;
+  color:#666;
+}
+.today-val{
+  font-size:20px;
+  font-weight:800;
+  margin-top:4px;
+}
+.chart-wrap{
+  background:#fafafa;
+  border:1px solid rgba(0,0,0,.06);
+  border-radius:12px;
+  padding:10px;
+}
+.dash-split{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:12px;
+}
+@media (max-width: 900px){
+  .dash-split{ grid-template-columns: 1fr; }
+}
+.quick-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+
+
+/* Auto-height scrollable table container (height set via JS) */
+.table-scroll{ width:100%; overflow:auto; }
+
+
+/* ===== App Version Label ===== */
+.app-version{font-size:11px;opacity:0.75;white-space:nowrap}
+
+/* Feedback textarea basic styling (inherits input look) */
+textarea{
+  width:100%;
+  box-sizing:border-box;
+  padding:10px 12px;
+  border:1px solid rgba(0,0,0,0.18);
+  border-radius:10px;
+  font-family:inherit;
+  resize:vertical;
+}
+textarea:focus{
+  outline:none;
+  border-color:rgba(0,0,0,0.35);
+  box-shadow:0 0 0 3px rgba(0,0,0,0.06);
+}
+
+
+/* Topbar navigation (replaces sidebar) */
+.topbar-left{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  min-width:0;
+}
+.brand{
+  display:flex;
+  flex-direction:column;
+  line-height:1.1;
+}
+.brand-title{
+  font-weight:700;
+  font-size:14px;
+  white-space:nowrap;
+}
+.brand-sub{
+  font-size:11px;
+  opacity:0.9;
+  white-space:nowrap;
+}
+.topnav{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+  min-width:0;
+}
+.topnav .nav-item{
+  margin:0;
+  padding:6px 10px;
+  border-radius:10px;
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.08);
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease;
+}
+.topnav .nav-item:hover,
+.topnav .nav-item.active{
+  background:rgba(255,255,255,0.22);
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,0.22);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.18);
+}
+.topnav .nav-item:active{ transform: translateY(0px) scale(0.98); box-shadow: 0 6px 14px rgba(0,0,0,0.16);}
+.topnav .nav-item span:not(.icon){
+  font-size:12px;
+  color:#fff;
+}
+.topnav .nav-item span.icon{
+  font-size:13px;
+}
+
+
+/* Bildirim Talepleri / Gelen Bildirimler: detay panelini daralt, listeyi büyüt */
+#page-gelen-bildirimler .flex{
+  display:flex;
+  gap:18px;
+  align-items:flex-start;
+}
+
+/* Sol liste alanı: kalan tüm genişliği alsın */
+#page-gelen-bildirimler .gelenListeWrapper{
+  flex:1 1 auto;
+  min-width:0;
+}
+
+/* Sağ detay: sabit ve daha dar */
+#page-gelen-bildirimler #gelenDetayWrapper{
+  flex:0 0 360px;          /* detay panel genişliği */
+  max-width:360px;
+  min-width:320px;
+}
+
+/* Detay kartı ekranda daha “net”: üstte sabit dursun, taşarsa kendi içinde kaydır */
+#page-gelen-bildirimler #gelenDetayPanel{
+  position:sticky;
+  top:82px; /* üst bar yüksekliğine göre */
+  max-height:calc(100vh - 110px);
+  overflow:auto;
+}
+
+/* Tablo: yatay kaydırmayı minimize et (drag gerekmesin) */
+#page-gelen-bildirimler .table-scroll{
+  overflow-x:hidden;
+}
+
+/* Tablo kolonları: sabit yerleşim + taşan metin kırp */
+#page-gelen-bildirimler .table-scroll table{
+  table-layout:fixed;
+  width:100%;
+}
+#page-gelen-bildirimler .table-scroll th,
+#page-gelen-bildirimler .table-scroll td{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+/* Ürün Açıklama: okunabilir olsun, satır kır */
+#page-gelen-bildirimler .table-scroll td:nth-child(6){
+  white-space:normal;
+  line-height:1.25;
+}
+
+/* Dar ekranda: detay altta */
+@media (max-width: 1100px){
+  #page-gelen-bildirimler .flex{flex-direction:column;}
+  #page-gelen-bildirimler #gelenDetayWrapper{
+    width:100%;
+    max-width:none;
+    min-width:0;
+  }
+  #page-gelen-bildirimler #gelenDetayPanel{
+    position:static;
+    max-height:none;
+  }
+}
+
+
+
+/* --- v1.0.3: Sağ detay paneli daha kompakt + yazılar aşağı doğru sarsın --- */
+#page-gelen-bildirimler #gelenDetayPanel{
+  font-size:13px;
+  line-height:1.35;
+}
+#page-gelen-bildirimler #gelenDetayPanel h2,
+#page-gelen-bildirimler #gelenDetayPanel h3,
+#page-gelen-bildirimler #gelenDetayPanel .title{
+  font-size:16px;
+  line-height:1.25;
+  white-space:normal;
+  word-break:break-word;
+}
+#page-gelen-bildirimler #gelenDetayPanel strong{
+  font-size:14px;
+  white-space:normal;
+  word-break:break-word;
+}
+#page-gelen-bildirimler #gelenDetayPanel p,
+#page-gelen-bildirimler #gelenDetayPanel .small-text,
+#page-gelen-bildirimler #gelenDetayPanel .muted{
+  font-size:12px;
+  white-space:normal;
+  word-break:break-word;
+}
+#page-gelen-bildirimler #gelenDetayPanel .ack-box,
+#page-gelen-bildirimler #gelenDetayPanel .note-box{
+  padding:8px 10px;
+  margin-top:6px;
+  white-space:normal;
+  word-break:break-word;
+}
+#page-gelen-bildirimler #gelenDetayPanel label{
+  font-size:12px;
+}
+#page-gelen-bildirimler #gelenDetayPanel textarea,
+#page-gelen-bildirimler #gelenDetayPanel input,
+#page-gelen-bildirimler #gelenDetayPanel select{
+  font-size:12px;
+}
+#page-gelen-bildirimler #gelenDetayPanel .btn,
+#page-gelen-bildirimler #gelenDetayPanel button{
+  font-size:12px;
+  padding:8px 10px;
+}
+
+
+
+/* ===== v1.0.4 UI: Right detail panel smaller + denser ===== */
+#page-bildirimler .flex{ align-items:flex-start; }
+
+/* Make right panel narrower */
+#page-bildirimler .flex-1{
+  flex:0 0 360px !important;
+  max-width:360px !important;
+}
+
+/* Let left table take remaining space */
+#page-bildirimler .flex-2{ flex:1 1 auto !important; }
+
+/* Detail panel typography */
+#page-bildirimler #detayPanel{
+  font-size:12px;
+  line-height:1.25;
+}
+#page-bildirimler #detayPanel h2,
+#page-bildirimler #detayPanel h3{
+  font-size:14px;
+  line-height:1.25;
+  margin:0 0 6px 0;
+}
+#page-bildirimler #detayPanel strong{ font-size:13px; }
+#page-bildirimler #detayPanel .small-text{ font-size:11px; }
+
+/* Denser inputs/buttons inside detail panel */
+#page-bildirimler #detayPanel textarea,
+#page-bildirimler #detayPanel input,
+#page-bildirimler #detayPanel select{
+  font-size:12px;
+  padding:6px 8px;
+}
+#page-bildirimler #detayPanel .btn,
+#page-bildirimler #detayPanel button{
+  font-size:12px;
+  padding:6px 10px;
+}
+
+/* Long titles should wrap instead of enlarging layout */
+#page-bildirimler #detayPanel *{
+  word-break:break-word;
+  overflow-wrap:anywhere;
+}
+
+/* Reduce card padding on right */
+#page-bildirimler #detayPanel.card{ padding:10px; }
+
+/* ===== Stok İşlemleri paneli (stok rolü detay panelinde) ===== */
+.stok-islemleri{
+  margin:12px 0 6px;
+  padding:12px;
+  background:#f8fafc;
+  border:1px solid #e5e7eb;
+  border-radius:10px;
+}
+.stok-islemleri-title{
+  font-size:13px;
+  font-weight:700;
+  color:#111827;
+  margin-bottom:10px;
+  padding-bottom:8px;
+  border-bottom:1px solid #e5e7eb;
+}
+.stok-islemleri-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px 12px;
+}
+.stok-field{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  font-size:11px;
+  font-weight:600;
+  color:#6b7280;
+  margin:0;
+  min-width:0;
+}
+.stok-field-full{ grid-column:1 / -1; }
+/* #page-bildirimler #detayPanel select kuralı ID'li olduğu için özgüllüğü
+   eşitlemek adına aynı prefix'i kullanıyoruz. */
+#page-bildirimler #detayPanel .stok-field select{
+  width:100%;
+  height:34px;
+  margin:0;
+  padding:4px 8px;
+  font-size:13px;
+  font-weight:400;
+  color:#111827;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:#fff;
+}
+#page-bildirimler #detayPanel .stok-field select:focus{
+  outline:none;
+  border-color:var(--primary);
+  box-shadow:0 0 0 2px rgba(139,31,35,0.12);
+}
+.stok-islemleri-hint{
+  margin-top:10px;
+  color:#9ca3af;
+  font-size:11px;
+}
+.stok-bulk-note{
+  margin:8px 0 0;
+  padding:8px 10px;
+  border-radius:8px;
+  background:#eef2ff;
+  color:#4338ca;
+  font-size:12px;
+  font-weight:600;
+}
+.stok-islemleri-actions{
+  margin-top:12px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+.stok-islemleri-actions button{
+  height:34px;
+  padding:0 14px;
+  font-size:13px;
+  border-radius:8px;
+}
+
+
+
+/* Bildirim Talepleri - filtre satırında Excel aktar butonu */
+.filter-inline-action{display:flex;gap:10px;align-items:flex-end}
+.filter-inline-action label{flex:1;margin:0}
+.filter-inline-action .btn-export{white-space:nowrap;height:34px;padding:6px 10px;font-size:12px;margin:0}
+
+/* Toast (bildirim) görünümü */
+#toastContainer.toast-wrap{position:fixed;right:18px;bottom:18px;z-index:999999;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+#toastContainer.toast-wrap .toast{pointer-events:none}
+#toastContainer.toast-wrap .toast .body{flex:1}
+
+
+
+/* --- Filter bar equal columns & inline export button --- */
+.filter-row{
+  display: grid !important;
+  /* auto-fit/minmax, konteyner genişliği her an yeniden ölçüldüğü için
+     birkaç piksellik bir titremede bile (örn. bir scrollbar'ın belirip
+     kaybolması) filtre kutularını farklı bir satıra atlatıp geri
+     getirebiliyordu — checkbox tıklarken "zıplayıp normale dönme" olarak
+     görülen sorun buydu (bkz. Layout Instability ölçümü:
+     .filter-inline-action satır atlıyordu). Sabit sütun sayısına
+     geçiyoruz; gerçek dar ekranlarda aşağıdaki media query devreye girer. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+  /* Ek güvence: bu kutunun her zaman en az bu kadar yer kaplamasını
+     sağlıyoruz ki üstteki/alttaki hizalama asla "sıfırdan" hesaplanıp
+     farklı bir sayıya oturmasın. Tavan koymuyoruz (içerik gerçekten daha
+     uzun olursa kesilmesin diye). */
+  min-height: 70px;
+}
+/* Bildirim Talepleri ve Gelen Bildirimler ekranlarında 5 filtre kutusu var
+   (diğerlerinde 4) — sütun sayısını buna göre eşitliyoruz. */
+#page-bildirimler .filter-row,
+#page-gelen-bildirimler .filter-row{
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+}
+/* Not: dar ekran/mobil için media query bilerek eklenmedi — bu iç yönetim
+   ekranı için "hiç oynamama" mobil uyumdan daha öncelikli. Bir eşik (breakpoint)
+   koymak, pencere genişliği tam o sınırın yakınında olduğunda (örn. DevTools
+   açıkken) aynı zıplama sorununu yeniden yaratabiliyordu. */
+.filter-row > div{
+  min-width: 0;
+}
+.filter-inline-action{
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+.filter-inline-action label{
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+.filter-inline-action select{
+  width: 100%;
+}
+.btn-export{
+  height: 36px;
+  padding: 0 14px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+/* Make selects consistent height. Alt margin'i sıfırlıyoruz: global
+   "input,select,textarea{margin-bottom:12px}" kuralı yüzünden select'ler
+   yanlarındaki butonla (Excel'e Aktar) aynı hizada bitmiyordu. */
+.filter-row select{
+  height: 36px;
+  margin: 0;
+}
+.filter-row label{
+  margin: 0;
+}
+
+/* ======================
+   Modern form refresh
+   ====================== */
+
+.page-container{
+  max-width:1200px;
+  margin:0 auto;
+  padding:24px;
+}
+
+.subtext{
+  color:#6b7280;
+  font-size:14px;
+  margin-bottom:18px;
+}
+
+.card{
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:14px;
+  padding:18px;
+  margin-bottom:16px;
+  box-shadow:0 6px 18px rgba(0,0,0,0.04);
+}
+
+.card-title{
+  font-size:15px;
+  font-weight:700;
+  color:#111827;
+  margin-bottom:14px;
+}
+
+.card label{
+  font-size:13px;
+  font-weight:600;
+  color:#374151;
+}
+
+.card input,
+.card select,
+.card textarea{
+  width:100%;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid #d1d5db;
+  outline:none;
+  transition:all .15s ease;
+  background:#fff;
+  box-sizing:border-box;
+}
+
+.card input:focus,
+.card select:focus,
+.card textarea:focus{
+  border-color:#a20c0c;
+  box-shadow:0 0 0 4px rgba(162,12,12,0.15);
+}
+
+.card textarea{min-height:90px;resize:vertical;}
+
+/* Yeni Bildirim: "Bildirim Bilgileri" ve "Ekler & Video" kartları yan yana
+   (ekranı yarı yarıya böler). Dar ekranda alt alta iner. */
+#page-yeni-bildirim.page-container{ max-width:1400px; }
+.nb-split{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  align-items:start;
+}
+.nb-split > .card{ margin-bottom:0; }
+@media (max-width:900px){
+  .nb-split{ grid-template-columns:1fr; }
+}
+/* Sağ sütun: Negatif/Pozitif şeridi + Ekler&Video kartı + aksiyon çubuğu */
+.nb-right-col{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+/* Negatif/Pozitif şeridi (kart dışında, üstte) */
+.np-toggle-bar{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:10px 14px;
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:14px;
+  box-shadow:0 6px 18px rgba(0,0,0,0.04);
+}
+.np-toggle-bar .btn{ margin:0; }
+/* Aksiyon çubuğu sağ sütunda — sabit (sticky) değil, normal akışta */
+.nb-actions{
+  position:static !important;
+  bottom:auto !important;
+  margin:0;
+}
+
+/* Negatif/Pozitif aktifken "Gelmesi Gereken Ürün" ve "Gelen Ürün"
+   etiketleri kırmızı (marka rengi) olur. */
+#formYeni.np-active #nbUrunLabel,
+#formYeni.np-active #nbNegatifPozitifFields label{
+  color:var(--primary);
+  font-weight:700;
+}
+
+.btn{
+  border:0;
+  padding:10px 14px;
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:600;
+  font-size:14px;
+  transition:all .15s ease;
+}
+
+.btn-primary{
+  background:#a20c0c;
+  color:#fff;
+}
+
+.btn-primary:hover{
+  transform:translateY(-1px);
+  filter:brightness(1.05);
+}
+
+.btn-secondary{
+  background:#f3f4f6;
+  color:#111827;
+}
+
+.btn-secondary:hover{background:#e5e7eb;}
+
+.hint,.help-text{
+  font-size:12px;
+  color:#6b7280;
+  margin-top:6px;
+  display:block;
+}
+
+.sticky-actions{
+  position:sticky;
+  bottom:0;
+  background:rgba(255,255,255,0.95);
+  backdrop-filter:blur(10px);
+  border-top:1px solid #e5e7eb;
+  padding:12px 18px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-radius:14px;
+  margin-top:18px;
+  gap:12px;
+}
+
+.sticky-actions .actions-right{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.sticky-actions a{
+  font-weight:600;
+  color:#2563eb;
+  text-decoration:none;
+}
+
+.sticky-actions a:hover{text-decoration:underline;}
+
+
+
+/* Top navigation underline glow (active + hover) */
+.topbar .nav-item{
+  position:relative;
+  overflow:hidden;
+  padding:8px 14px;
+  border-radius:16px;
+}
+
+.topbar .nav-item::after{
+  content:"";
+  position:absolute;
+  left:14px;
+  right:14px;
+  bottom:6px;
+  height:2px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.0);
+  box-shadow:0 0 0 rgba(255,255,255,0.0);
+  opacity:0;
+  transform:translateY(6px);
+  transition:opacity .22s ease, transform .22s ease, box-shadow .22s ease, background .22s ease;
+  pointer-events:none;
+}
+
+.topbar .nav-item:hover::after{
+  opacity:1;
+  transform:translateY(0);
+  background:rgba(255,255,255,0.55);
+  box-shadow:0 0 10px rgba(255,255,255,0.45), 0 0 18px rgba(255,255,255,0.25);
+}
+
+.topbar .nav-item.active::after{
+  opacity:1;
+  transform:translateY(0);
+  background:rgba(255,255,255,0.75);
+  box-shadow:0 0 12px rgba(255,255,255,0.55), 0 0 26px rgba(255,255,255,0.28);
+}
+
+/* Icon subtle glow pulse on hover (no stars) */
+@keyframes iconGlowPulse{
+  0%{ filter:drop-shadow(0 0 0 rgba(255,255,255,0.0)); transform:translateY(0); }
+  50%{ filter:drop-shadow(0 0 8px rgba(255,255,255,0.55)); transform:translateY(-1px); }
+  100%{ filter:drop-shadow(0 0 0 rgba(255,255,255,0.0)); transform:translateY(0); }
+}
+
+.topbar .nav-item:hover .icon{
+  animation:iconGlowPulse 1.1s ease-in-out infinite;
+}
+
+
+/* Auth splash to prevent login flash on refresh */
+#authSplash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(245,246,248,.92);backdrop-filter:blur(6px);z-index:9999;opacity:1;transition:opacity .25s ease;}
+#authSplash.hidden{opacity:0;pointer-events:none;}
+#authSplash .spinner{width:42px;height:42px;border-radius:999px;border:3px solid rgba(0,0,0,.12);border-top-color:rgba(0,0,0,.45);animation:mpSpin 0.9s linear infinite;margin-right:14px;}
+#authSplash .label{font-weight:600;color:#111827;letter-spacing:.2px;}
+@keyframes mpSpin{to{transform:rotate(360deg);}}
+
+/* KPI count pop */
+.kpi-value.pop{animation:mpPop .25s ease-out;}
+@keyframes mpPop{0%{transform:scale(1);}60%{transform:scale(1.08);}100%{transform:scale(1);}}
+
+
+/* KPI number pop at the end of count-up */
+.kpi-number-pop{animation: mpKpiPop .35s ease-out;display:inline-block;}
+@keyframes mpKpiPop{0%{transform:scale(1);}55%{transform:scale(1.08);}100%{transform:scale(1);}}
+
+
+/* Top 20 tables: keep compact with sticky headers */
+.top20-table-container{
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 10px;
+}
+.top20-table-container table{margin-bottom:0;}
+.top20-table-container thead th{
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #f8f9fa; /* table-light */
+}
+
+
+/* Top20 layout: 3 tables side-by-side (responsive) */
+.top20-grid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap:16px;
+  margin-top: 8px;
+  align-items: start;
+}
+.top20-card{ min-width:0; }
+@media (max-width: 1200px){
+  .top20-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 992px){
+  .top20-grid{ grid-template-columns: 1fr; }
+}
+/* compact table sizing for Top20 only */
+.top20-grid .table{ font-size: 13px; }
+.top20-grid .table th,
+.top20-grid .table td{ padding: .45rem .6rem; }
+.top20-grid .table thead th{ position: sticky; top: 0; background: #f8fafc; z-index: 1; }
+.top20-grid .top20-table-container{ max-height: 340px; overflow:auto; border-radius: 12px; }
+
+
+
+/* === BULK EXCEL BUTTONS (MAVİ) === */
+#bulkExcelSelectBtn,
+#bulkExcelUploadBtn{
+  background:#2563eb;           /* blue */
+  color:#ffffff;
+  border:1px solid #1d4ed8;
+  font-weight:700;
+  border-radius:10px;
+  box-shadow: 0 6px 16px rgba(37,99,235,0.18);
+}
+
+#bulkExcelSelectBtn:hover,
+#bulkExcelUploadBtn:hover{
+  background:#1d4ed8;
+  border-color:#1e40af;
+}
+
+#bulkExcelSelectBtn:active,
+#bulkExcelUploadBtn:active{
+  transform: translateY(1px);
+}
+
+#bulkExcelSelectBtn:disabled,
+#bulkExcelUploadBtn:disabled{
+  background:#93c5fd;
+  border-color:#93c5fd;
+  color:#0b1b3a;
+  box-shadow:none;
+  opacity:0.8;
+}
+
+.depo-card-compact .depo-card-head{
+  padding-bottom: 10px;
+}
+.depo-table-wrap-compact{
+  max-height: 360px;
+}
+.depo-tbl-compact tbody td{
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.depo-empty-date{
+  display: inline-block;
+  font-weight: 800;
+  color: #7c5e00;
+  background: #fff3a3;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+
+.depo-tbl-compact thead th:nth-child(2),
+.depo-tbl-compact thead th:nth-child(3),
+.depo-tbl-compact tbody td:nth-child(2),
+.depo-tbl-compact tbody td:nth-child(3){
+  text-align: center !important;
+}
+
+.depo-tbl-compact tbody .depo-mid-cell{
+  vertical-align: middle;
+}
+
+.depo-tbl-compact tbody tr.depo-stale-row td{
+  background: #f8d7da !important;
+}
+
+.depo-tbl-compact tbody tr.depo-stale-row td:first-child{
+  border-left: 4px solid #b42318;
+}
+
+.depo-tbl-compact tbody tr.depo-stale-row:hover td{
+  background: #f1bfc4 !important;
+}
+
+
+.depo-tbl-compact tbody tr.depo-no-data-row td{
+  background: #efb3b8 !important;
+}
+
+.depo-tbl-compact tbody tr.depo-no-data-row td:first-child{
+  border-left: 4px solid #8f1d1d;
+}
+
+.depo-tbl-compact tbody tr.depo-no-data-row:hover td{
+  background: #e59aa2 !important;
+}
+
+.login-footer{
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  text-align: center;
+  color: rgba(255,255,255,0.9);
+  font-size: 13px;
+  z-index: 50;
+}
+.login-footer-copy{font-weight:600;margin-bottom:4px;}
+.login-footer-text{font-size:12px;margin-bottom:10px;}
+.login-footer-actions{display:flex;justify-content:center;gap:12px;}
+.footer-icon-link{
+  width:36px;height:36px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,0.15);
+  text-decoration:none;font-size:18px;transition:0.2s;
+}
+.footer-icon-link:hover{background:rgba(255,255,255,0.3);}
+
+
+#authGate{
+  flex-direction: column !important;
+  gap: 18px;
+}
+
+#authGate .login-footer{
+  position: relative !important;
+  left: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  z-index: 3 !important;
+  width: min(420px, calc(100% - 36px));
+  text-align: center;
+  color: rgba(255,255,255,0.92);
+  font-size: 13px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+}
+
+#authGate .login-footer-copy{
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+#authGate .login-footer-text{
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+#authGate .login-footer-actions{
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+#authGate .footer-icon-link{
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  text-decoration: none;
+  font-size: 18px;
+  transition: background .2s ease, transform .2s ease;
+}
+
+#authGate .footer-icon-link:hover{
+  background: rgba(255,255,255,0.28);
+  transform: translateY(-1px);
+}
+
+
+#authGate{
+  flex-direction: column !important;
+}
+
+#authGate .login-footer{
+  position: fixed !important;
+  left: 50% !important;
+  bottom: 18px !important;
+  transform: translateX(-50%) !important;
+  z-index: 3 !important;
+  width: min(520px, calc(100% - 36px));
+  text-align: center;
+  color: rgba(255,255,255,0.95);
+  font-size: 13px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.38);
+}
+
+#authGate .login-footer-copy{
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+#authGate .login-footer-text{
+  font-size: 12px;
+  margin-bottom: 10px;
+  opacity: 0.95;
+}
+
+#authGate .login-footer-actions{
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+#authGate .footer-icon-link{
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.16);
+  color: #ffffff;
+  text-decoration: none;
+  transition: background .2s ease, transform .2s ease;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+}
+
+#authGate .footer-icon-link:hover{
+  background: rgba(255,255,255,0.28);
+  transform: translateY(-1px);
+}
+
+#authGate .footer-icon-link-teams{
+  background: rgba(98, 100, 234, 0.28);
+}
+
+#authGate .footer-icon-link-teams:hover{
+  background: rgba(98, 100, 234, 0.42);
+}
+
+#authGate .footer-icon-svg{
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+  display: block;
+}
+
+.login-footer{display:none;}
+body.auth-mode #authGate .login-footer,
+#authGate[aria-hidden="false"] .login-footer{display:block;}
+
+/* "Aktif filtre: ..." rozeti kullanıcı isteğiyle gizlendi. */
+.quick-filter-info{display:none !important;}
+.quick-filter-info.hidden{display:none !important;}
+#btnClearBildirimFilters.hidden{display:none !important;}
+
+/* Toplu merkez açıklama seçimi.
+   Varsayılan: tablo tamamen düz — checkbox KOLONU bile yok, sadece "833 kayıt"
+   satırında "Seç" butonu var. Butona basınca body.bulk-select-mode eklenir;
+   ancak o zaman checkbox kolonu (başlık + satır checkbox'ları + "tümünü seç")
+   görünür olur ve tablo bir kolon genişler. Kaydet/İptal ile mod kapanır,
+   kolon tekrar tamamen kaybolur (soldaki boşluk gitmiş olur). */
+.bulk-select-col{display:none;width:44px;text-align:center;}
+/* Checkbox kolonu, toplu seçim modu aktifken tüm bulk tablolarında görünür. */
+body.bulk-select-mode .bulk-select-col{display:table-cell;}
+/* Checkbox'ı native margin/padding'den tamamen arındırıp sabit boyuta
+   kilitliyoruz. Global "input{...}" kuralı checkbox'a da margin/padding
+   uyguluyordu; işaretlenince satır yüksekliği anlık oynayıp altındaki
+   satırları kaydırıyordu ("pop-up gibi hareket edip normale dönme").
+   Ayrıca checkbox'ı akıştan çıkarıp (position:absolute) hücreye ortalıyoruz
+   ki satır yüksekliğine HİÇ katkı yapmasın. */
+.bulk-check{
+  width:16px;height:16px;
+  margin:0 !important;
+  padding:0 !important;
+  cursor:pointer;
+  vertical-align:middle;
+  box-sizing:border-box;
+}
+#tblBildirimler .bulk-select-col,
+#tblGelenBildirimler .bulk-select-col,
+#tblKayseriYapilan .bulk-select-col,
+#tblMalkabulYapilan .bulk-select-col{
+  position:relative;
+}
+#tblBildirimler .bulk-select-col .bulk-check,
+#tblGelenBildirimler .bulk-select-col .bulk-check,
+#tblKayseriYapilan .bulk-select-col .bulk-check,
+#tblMalkabulYapilan .bulk-select-col .bulk-check{
+  position:absolute;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+}
+/* Satır ve hücreleri sabit yükseklikte tutuyoruz: içerik (checkbox işareti,
+   seçim vurgusu, vs.) ne olursa olsun satır boyu değişmesin. */
+#tblBildirimler tr, #tblGelenBildirimler tr,
+#tblKayseriYapilan tr, #tblMalkabulYapilan tr{ height:33px; }
+#tblBildirimler td, #tblGelenBildirimler td,
+#tblKayseriYapilan td, #tblMalkabulYapilan td{ height:33px; padding-top:6px; padding-bottom:6px; }
+.bulk-select-all-cb{margin:0 auto;}
+/* NOT: .bulk-select-toggle-btn ("Seç" butonu) stilleri .filter-tools bloğunun
+   yanında (dosyanın üst kısmında) tanımlı — orada şık haliyle ele alınıyor. */
+
+
+.np-sign-both{color:#1f2937;font-weight:800;}
+.np-inline-wrap{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+.np-sign-inline{color:#b91c1c;font-weight:800;display:inline-flex;align-items:center;line-height:1;white-space:nowrap;flex:0 0 auto;}
+
+
+
+.feedback-overlay{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.55);padding:20px;}
+.feedback-overlay.hidden{display:none !important;}
+.feedback-card{width:min(92vw,520px);background:#fff;color:#0f172a;border-radius:18px;padding:24px;box-shadow:0 24px 80px rgba(15,23,42,.28);}
+.feedback-card h2{margin:0 0 8px;font-size:24px;}
+.feedback-subtitle{margin:0 0 16px;color:#475569;}
+.feedback-stars{display:flex;gap:8px;margin:8px 0 16px;}
+.feedback-star{border:none;background:transparent;cursor:pointer;font-size:36px;line-height:1;color:#cbd5e1;padding:0 2px;transition:transform .15s ease,color .15s ease;}
+.feedback-star.active{color:#f59e0b;}
+.feedback-star:hover{transform:scale(1.08);}
+.feedback-textarea{width:100%;min-height:110px;resize:vertical;border:1px solid #d1d5db;border-radius:12px;padding:12px 14px;font:inherit;margin:0 0 10px;}
+.feedback-textarea:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12);}
+.feedback-err{min-height:20px;color:#b91c1c;font-weight:600;margin:0 0 10px;}
+.feedback-submit{width:100%;}
+body.feedback-open{overflow:hidden;}

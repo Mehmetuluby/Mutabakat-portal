@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "basbugcrm-3026e"
+  },
+  "targets": {
+    "basbugcrm-3026e": {
+      "hosting": {
+        "mutabakatportali": [
+          "mutabakatportali"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
